@@ -1,0 +1,1210 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using CargoTracking.Grpc
+@using System.Globalization
+@implements IDisposable
+@inject IJSRuntime JSRuntime
+
+<PageTitle>KARGO PRO | Kurumsal Lojistik ve Operasyon Yönetim Sistemi</PageTitle>
+
+<div class="app-wrapper">
+    <!-- SOL YAN MENÜ (SIDEBAR) -->
+    <aside class="sidebar">
+        <div class="brand-header">
+            <h1>KARGO PRO</h1>
+            <p>Tek Merkez, Sıfır Kayıp,<br />Kesintisiz Lojistik Takip</p>
+        </div>
+
+        <nav class="nav-list">
+            <button type="button" class="nav-btn @(_activePage == "HOME" ? "active" : "")" @onclick='() => NavigateTo("HOME", "Operasyon Merkezi  >  Ana Sayfa (Özet)")'>
+                ANA SAYFA (ÖZET)
+            </button>
+            <button type="button" class="nav-btn @(_activePage == "ADD" ? "active" : "")" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  >  Yeni Kargo Kaydı")'>
+                YENİ KARGO KAYDI
+            </button>
+            <button type="button" class="nav-btn @(_activePage == "QUERY" ? "active" : "")" @onclick='() => { ResetQueryScreen(); NavigateTo("QUERY", "Operasyon Merkezi  >  Kargo Sorgula ve Düzenle"); }'>
+                SORGULA VE DÜZENLE
+            </button>
+            <button type="button" class="nav-btn @(_activePage == "LIST" ? "active" : "")" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
+                KARGO LİSTELERİ
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            Kurumsal Operasyon Ağı v2.4<br />Yeni Nesil Dağıtık Kargo Mimarisi
+        </div>
+    </aside>
+
+    <!-- SAĞ ANA BÖLGE -->
+    <div class="main-area">
+        <!-- ÜST BAR: GERİ DÖN + EKMEK KIRINTISI (BREADCRUMB) + SUNUCU DURUMU + CANLI SAAT -->
+        <header class="top-header">
+            <div class="header-left">
+                <button type="button" class="btn-back" disabled="@(_navHistory.Count == 0)" @onclick="GoBackAsync">
+                    &lt; Geri Dön
+                </button>
+                <span class="breadcrumb-text">@_breadcrumb</span>
+            </div>
+            <div class="header-right">
+                <span class="server-badge @(_serverOnline ? "online" : "offline")">
+                    ● gRPC Sunucu: @(_serverOnline ? "Aktif (5135)" : "Bağlantı Yok")
+                </span>
+                <span class="live-clock">@_clockText</span>
+            </div>
+        </header>
+
+        <!-- İÇERİK EKRANLARI -->
+        <main class="page-content">
+
+            <!-- 1. SAYFA: ANA SAYFA (ÖZET) -->
+            @if (_activePage == "HOME")
+            {
+                <div class="page-section">
+                    <h2 class="page-title">Operasyon Kontrol Merkezi</h2>
+                    <p class="page-subtitle">İlgili kargo listesini doğrudan görüntülemek için aşağıdaki özet kartların üzerine tıklayabilirsiniz.</p>
+
+                    <div class="summary-cards">
+                        <div class="summary-card card-blue" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
+                            <div class="sc-title">TÜM KAYITLI KARGOLAR</div>
+                            <div class="sc-count">@_totalCount</div>
+                            <div class="sc-link">Tüm listeyi açmak için tıklayın &gt;</div>
+                        </div>
+
+                        <div class="summary-card card-green" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Aktif Kargolar"); await LoadCargoListAsync("ACTIVE"); }'>
+                            <div class="sc-title">AKTİF (OPERASYONDAKİ) KARGOLAR</div>
+                            <div class="sc-count">@_activeCount</div>
+                            <div class="sc-link">Sadece aktif kargoları görmek için tıklayın &gt;</div>
+                        </div>
+
+                        <div class="summary-card card-slate" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Pasif (Arşiv)"); await LoadCargoListAsync("PASSIVE"); }'>
+                            <div class="sc-title">PASİF (ARŞİVLENMİŞ) KARGOLAR</div>
+                            <div class="sc-count">@_passiveCount</div>
+                            <div class="sc-link">Teslim ve iptal kayıtları için tıklayın &gt;</div>
+                        </div>
+                    </div>
+
+                    <div class="slogan-box">
+                        <h3>"Hız, Güven ve Tam İzlenebilirlik: Tüm Kargo Operasyonunuz Tek Çatı Altında."</h3>
+                        <p>KARGO PRO altyapısı ile şubeler arası gönderi takibini gerçek zamanlı yönetin, geçmişe dönük arşiv kayıtlarını sıfır veri kaybıyla denetleyin.</p>
+                    </div>
+                </div>
+            }
+
+            <!-- 2. SAYFA: YENİ KARGO KAYDI -->
+            @if (_activePage == "ADD")
+            {
+                <div class="page-section">
+                    <h2 class="page-title">Yeni Kargo Gönderimi Oluştur</h2>
+
+                    <div class="panel-card" style="max-width: 540px;">
+                        @if (!string.IsNullOrEmpty(_addFeedback))
+                        {
+                            <div class="alert-box @(_addSuccess ? "alert-ok" : "alert-err")">@_addFeedback</div>
+                        }
+
+                        <div class="field-group">
+                            <label>Gönderici Adı Soyadı / Kurum:</label>
+                            <input type="text" class="text-input" @bind="_newSender" placeholder="Örn: Emre Dindar" />
+                        </div>
+
+                        <div class="field-group">
+                            <label>Alıcı Adı Soyadı:</label>
+                            <input type="text" class="text-input" @bind="_newReceiver" placeholder="Örn: Ceyda Gülmez" />
+                        </div>
+
+                        <div class="field-group">
+                            <label>Çıkış Şubesi / Son Konum:</label>
+                            <input type="text" class="text-input" @bind="_newLocation" placeholder="Örn: İstanbul / Kadıköy Şubesi" />
+                        </div>
+
+                        <div class="field-group">
+                            <label>Tahmini Teslim Tarihi (Geçmiş Tarih Seçilemez):</label>
+                            <input type="date" class="text-input" @bind="_newDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        </div>
+
+                        <button type="button" class="btn-action btn-green" @onclick="CreateCargoAsync">
+                            KARGOYU SİSTEME KAYDET
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- 3. SAYFA: SORGULA VE DÜZENLE -->
+            @if (_activePage == "QUERY")
+            {
+                <div class="page-section">
+                    <h2 class="page-title">Kargo Sorgulama ve Kayıt Düzenleme</h2>
+
+                    <div class="panel-card" style="max-width: 740px; margin-bottom: 20px;">
+                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin (Sadece Rakam):</label>
+                        <div class="query-bar">
+                            <span class="tr-prefix">TR -</span>
+                            <input type="text"
+                                   class="code-box"
+                                   maxlength="4"
+                                   value="@_trackingDigits"
+                                   @oninput="OnTrackingCodeInput"
+                                   placeholder="1001" />
+                            <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="SearchCargoByCodeAsync">
+                                KAYDI SORGULA
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_queryFeedback))
+                        {
+                            <div class="alert-box @(_querySuccess ? "alert-ok" : "alert-err")" style="margin-top:14px;">@_queryFeedback</div>
+                        }
+                    </div>
+
+                    @if (_showDetailEditCard)
+                    {
+                        <div class="panel-card" style="max-width: 740px;">
+                            <div class="edit-header-strip">
+                                Takip Numarası: @_editTrackingNo &nbsp;&nbsp;|&nbsp;&nbsp; Kayıt Statüsü: @(_editIsActive ? "AKTİF KAYIT" : "PASİF (ARŞİVLENMİŞ) KAYIT")
+                            </div>
+
+                            <div class="grid-2col">
+                                <div class="field-group">
+                                    <label>Gönderici Adı Soyadı:</label>
+                                    <input type="text" class="text-input" @bind="_editSender" />
+                                </div>
+                                <div class="field-group">
+                                    <label>Alıcı Adı Soyadı:</label>
+                                    <input type="text" class="text-input" @bind="_editReceiver" />
+                                </div>
+                                <div class="field-group">
+                                    <label>Son Konum / Şube:</label>
+                                    <input type="text" class="text-input" @bind="_editLocation" />
+                                </div>
+                                <div class="field-group">
+                                    <label>Tahmini Teslim Tarihi:</label>
+                                    <input type="date" class="text-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                </div>
+                            </div>
+
+                            <div class="field-group" style="max-width: 340px;">
+                                <label>Operasyon Durumu:</label>
+                                <select class="text-input" @bind="_editStatus">
+                                    <option value="Hazırlanıyor">Hazırlanıyor</option>
+                                    <option value="Yola Çıktı">Yola Çıktı</option>
+                                    <option value="Teslim Edildi">Teslim Edildi</option>
+                                    <option value="İptal Edildi">İptal Edildi</option>
+                                </select>
+                            </div>
+
+                            <button type="button" class="btn-action btn-orange" @onclick="SaveEditedCargoAsync">
+                                DEĞİŞİKLİKLERİ VE DURUMU KAYDET
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- 4. SAYFA: KARGO LİSTELERİ + SAĞDA TEK TIK ÖZET PANELİ -->
+            @if (_activePage == "LIST")
+            {
+                <div class="page-section">
+                    <h2 class="page-title">@_listHeaderTitle</h2>
+
+                    <div class="filter-toolbar">
+                        <div class="tab-group">
+                            <button type="button" class="filter-tab @(_currentFilter == "ALL" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("ALL")'>
+                                TÜM KARGOLAR
+                            </button>
+                            <button type="button" class="filter-tab @(_currentFilter == "ACTIVE" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("ACTIVE")'>
+                                AKTİF KARGOLAR
+                            </button>
+                            <button type="button" class="filter-tab @(_currentFilter == "PASSIVE" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("PASSIVE")'>
+                                PASİF (ARŞİV)
+                            </button>
+                        </div>
+
+                        <div class="live-search-box">
+                            <label>🔎 Hızlı Ara:</label>
+                            <input type="text" class="text-input" style="width:260px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, gönderici, alıcı, şube..." />
+                        </div>
+                    </div>
+
+                    <div class="list-split-layout">
+                        <!-- SOL: SABİT SÜTUNLU RENKLİ TABLO -->
+                        <div class="table-wrapper">
+                            <table class="enterprise-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 95px;">Takip No</th>
+                                        <th style="width: 140px;">Gönderici</th>
+                                        <th style="width: 140px;">Alıcı</th>
+                                        <th style="width: 125px;">Güncel Durum</th>
+                                        <th>Son Konum / Şube</th>
+                                        <th style="width: 110px;">Teslim Tarihi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!FilteredCargos.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="6" style="text-align:center; padding: 30px; color:#64748b;">
+                                                Bu filtreye uygun kargo kaydı bulunamadı.
+                                            </td>
+                                        </tr>
+                                    }
+                                    @foreach (var item in FilteredCargos)
+                                    {
+                                        <tr class="@GetRowColorClass(item.CurrentStatus) @(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "selected-row" : "")"
+                                            @onclick="() => SelectCargoForPreview(item)">
+                                            <td><strong>@item.TrackingNumber</strong></td>
+                                            <td>@item.SenderName</td>
+                                            <td>@item.ReceiverName</td>
+                                            <td><strong>@item.CurrentStatus</strong></td>
+                                            <td>@item.LastLocation</td>
+                                            <td>@item.EstimatedDelivery</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- SAĞ: 1 KEZ TIKLAYINCA AÇILAN SEÇİLİ KARGO ÖZETİ VE KOPYALAMA KARTI -->
+                        <div class="quick-preview-panel">
+                            <div class="qp-header">SEÇİLİ KARGO ÖZETİ</div>
+                            @if (_selectedCargo != null)
+                            {
+                                <div class="qp-body">
+                                    <div class="qp-trackno">@_selectedCargo.TrackingNumber</div>
+
+                                    <button type="button" class="btn-copy @(_copiedJustNow ? "copied" : "")" @onclick="CopySelectedTrackNoAsync">
+                                        @(_copiedJustNow ? "✓ PANOYA KOPYALANDI!" : "TAKİP NO KOPYALA")
+                                    </button>
+
+                                    <div class="qp-divider"></div>
+
+                                    <div class="qp-item">
+                                        <span>GÖNDERİCİ BİLGİSİ:</span>
+                                        <strong>@_selectedCargo.SenderName</strong>
+                                    </div>
+                                    <div class="qp-item">
+                                        <span>ALICI BİLGİSİ:</span>
+                                        <strong>@_selectedCargo.ReceiverName</strong>
+                                    </div>
+                                    <div class="qp-item">
+                                        <span>OPERASYON DURUMU:</span>
+                                        <strong>@_selectedCargo.CurrentStatus</strong>
+                                    </div>
+                                    <div class="qp-item">
+                                        <span>SON KONUM / ŞUBE:</span>
+                                        <strong>@_selectedCargo.LastLocation</strong>
+                                    </div>
+                                    <div class="qp-item">
+                                        <span>TAHMİNİ TESLİM TARİHİ:</span>
+                                        <strong>@_selectedCargo.EstimatedDelivery</strong>
+                                    </div>
+                                    <div class="qp-item">
+                                        <span>KAYIT STATÜSÜ:</span>
+                                        <strong>@(_selectedCargo.IsActive ? "Aktif (Operasyonda)" : "Pasif (Arşivde)")</strong>
+                                    </div>
+
+                                    <button type="button" class="btn-action btn-orange" style="margin-top:auto;" @onclick="OpenSelectedCargoInEditAsync">
+                                        BU KARGOYU DÜZENLE &gt;
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="qp-empty">
+                                    Detayları görmek, takip numarasını kopyalamak veya düzenlemek için soldaki listeden bir kargoya tıklayın.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+        </main>
+    </div>
+</div>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body, html {
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', sans-serif;
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+
+    .app-wrapper {
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+    }
+
+    /* SOL YAN MENÜ */
+    .sidebar {
+        width: 255px;
+        background: #0f172a;
+        color: #94a3b8;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        user-select: none;
+    }
+
+    .brand-header {
+        background: #090e1a;
+        padding: 20px 22px;
+        border-bottom: 1px solid #1e293b;
+    }
+
+        .brand-header h1 {
+            margin: 0;
+            font-size: 22px;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
+        }
+
+        .brand-header p {
+            margin: 6px 0 0 0;
+            font-size: 11.5px;
+            color: #94a3b8;
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+    .nav-list {
+        display: flex;
+        flex-direction: column;
+        margin-top: 10px;
+    }
+
+    .nav-btn {
+        background: transparent;
+        border: none;
+        border-left: 5px solid transparent;
+        color: #94a3b8;
+        padding: 17px 22px;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+
+        .nav-btn:hover {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        .nav-btn.active {
+            background: #1e293b;
+            color: #ffffff;
+            border-left-color: #38bdf8;
+        }
+
+    .sidebar-footer {
+        margin-top: auto;
+        padding: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: #64748b;
+        border-top: 1px solid #1e293b;
+    }
+
+    /* ÜST BAR VE EKMEK KIRINTISI */
+    .main-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .top-header {
+        height: 60px;
+        background: #ffffff;
+        border-bottom: 1px solid #cbd5e1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 26px;
+        flex-shrink: 0;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .btn-back {
+        background: #e2e8f0;
+        color: #1e293b;
+        border: none;
+        padding: 7px 14px;
+        font-weight: 700;
+        font-size: 12.5px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+        .btn-back:disabled {
+            opacity: 0.45;
+            cursor: default;
+        }
+
+    .breadcrumb-text {
+        font-weight: 700;
+        font-size: 14px;
+        color: #334155;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .server-badge.online {
+        color: #16a34a;
+    }
+
+    .server-badge.offline {
+        color: #dc2626;
+    }
+
+    .live-clock {
+        color: #475569;
+    }
+
+    /* İÇERİK ALANI */
+    .page-content {
+        flex: 1;
+        padding: 26px 30px;
+        overflow-y: auto;
+    }
+
+    .page-title {
+        margin: 0 0 6px 0;
+        font-size: 24px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .page-subtitle {
+        margin: 0 0 22px 0;
+        font-size: 14px;
+        color: #64748b;
+    }
+
+    /* ÖZET KARTLARI */
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 295px);
+        gap: 22px;
+        margin-bottom: 28px;
+    }
+
+    .summary-card {
+        padding: 22px;
+        color: #ffffff;
+        cursor: pointer;
+        transition: transform 0.15s;
+        user-select: none;
+    }
+
+        .summary-card:hover {
+            transform: translateY(-3px);
+        }
+
+    .card-blue {
+        background: #1e40af;
+    }
+
+    .card-green {
+        background: #15803d;
+    }
+
+    .card-slate {
+        background: #475569;
+    }
+
+    .sc-title {
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .sc-count {
+        font-size: 44px;
+        font-weight: 800;
+        margin: 12px 0 18px 0;
+    }
+
+    .sc-link {
+        font-size: 11.5px;
+        color: #e2e8f0;
+    }
+
+    .slogan-box {
+        max-width: 930px;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-left: 5px solid #1e40af;
+        padding: 22px 26px;
+    }
+
+        .slogan-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 16.5px;
+            font-style: italic;
+            color: #0f172a;
+        }
+
+        .slogan-box p {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+    /* FORMLAR VE KARTLAR */
+    .panel-card {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        padding: 26px;
+    }
+
+    .field-group {
+        margin-bottom: 16px;
+    }
+
+        .field-group label, .small-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+    .text-input {
+        width: 100%;
+        padding: 9px 12px;
+        font-size: 14px;
+        border: 1px solid #94a3b8;
+        outline: none;
+    }
+
+        .text-input:focus {
+            border-color: #1e40af;
+        }
+
+    .query-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+    }
+
+    .tr-prefix {
+        font-size: 20px;
+        font-weight: 800;
+        color: #1e40af;
+    }
+
+    .code-box {
+        width: 125px;
+        font-size: 20px;
+        font-weight: 800;
+        padding: 6px 10px;
+        border: 2px solid #1e40af;
+        text-align: center;
+    }
+
+    .edit-header-strip {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        padding: 10px 14px;
+        font-weight: 700;
+        font-size: 13.5px;
+        color: #0f172a;
+        margin-bottom: 18px;
+    }
+
+    .grid-2col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .btn-action {
+        width: 100%;
+        height: 42px;
+        border: none;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 13.5px;
+        cursor: pointer;
+    }
+
+    .btn-green {
+        background: #15803d;
+    }
+
+    .btn-blue {
+        background: #1e40af;
+    }
+
+    .btn-orange {
+        background: #ea580c;
+    }
+
+    .alert-box {
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+
+    .alert-ok {
+        background: #dcfce7;
+        color: #14532d;
+        border: 1px solid #86efac;
+    }
+
+    .alert-err {
+        background: #fee2e2;
+        color: #7f1d1d;
+        border: 1px solid #fca5a5;
+    }
+
+    /* LİSTE VE TABLO BÖLÜMÜ */
+    .filter-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1020px;
+        margin-bottom: 14px;
+    }
+
+    .tab-group {
+        display: flex;
+        gap: 8px;
+    }
+
+    .filter-tab {
+        width: 165px;
+        height: 38px;
+        border: none;
+        background: #cbd5e1;
+        color: #334155;
+        font-weight: 700;
+        font-size: 12.5px;
+        cursor: pointer;
+        border-bottom: 4px solid transparent;
+    }
+
+        .filter-tab.active-tab {
+            background: #0f172a;
+            color: #ffffff;
+            border-bottom-color: #38bdf8;
+        }
+
+    .live-search-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 13px;
+    }
+
+    .list-split-layout {
+        display: flex;
+        gap: 16px;
+        max-width: 1020px;
+        height: 500px;
+    }
+
+    .table-wrapper {
+        flex: 1;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        overflow-y: auto;
+    }
+
+    .enterprise-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13px;
+        user-select: none;
+    }
+
+        .enterprise-table th {
+            background: #1e293b;
+            color: #ffffff;
+            text-align: left;
+            padding: 11px 10px;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+        }
+
+        .enterprise-table td {
+            padding: 10px;
+            border-bottom: 1px solid #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+
+    /* DURUM RENKLERİ (Tıklanınca Mavi Olmaz, Kendi Renginde Kalır) */
+    .row-prep {
+        background: #fef9c3;
+        color: #713f12;
+    }
+
+    .row-transit {
+        background: #e0f2fe;
+        color: #0c4a6e;
+    }
+
+    .row-delivered {
+        background: #dcfce7;
+        color: #14532d;
+    }
+
+    .row-cancelled {
+        background: #fee2e2;
+        color: #7f1d1d;
+    }
+
+    .selected-row td {
+        font-weight: 700;
+        border-top: 2px solid #0f172a;
+        border-bottom: 2px solid #0f172a;
+    }
+
+    /* SAĞ HIZLI ÖZET KARTI */
+    .quick-preview-panel {
+        width: 265px;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+    }
+
+    .qp-header {
+        background: #1e293b;
+        color: #ffffff;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12.5px;
+    }
+
+    .qp-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+
+    .qp-trackno {
+        font-size: 20px;
+        font-weight: 800;
+        color: #1e40af;
+        margin-bottom: 8px;
+    }
+
+    .btn-copy {
+        width: 100%;
+        height: 34px;
+        border: none;
+        background: #e2e8f0;
+        color: #0f172a;
+        font-weight: 700;
+        font-size: 11.5px;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+
+        .btn-copy.copied {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
+    .qp-divider {
+        height: 1px;
+        background: #cbd5e1;
+        margin: 14px 0;
+    }
+
+    .qp-item {
+        margin-bottom: 12px;
+        font-size: 12.5px;
+    }
+
+        .qp-item span {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .qp-item strong {
+            color: #0f172a;
+        }
+
+    .qp-empty {
+        padding: 24px 16px;
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.5;
+    }
+</style>
+
+@code {
+    private readonly string _serverAddress = "http://localhost:5135";
+
+    // Sayfa ve Ekmek Kırıntısı (Breadcrumb) Geçmişi
+    private string _activePage = "HOME";
+    private string _breadcrumb = "Operasyon Merkezi  >  Ana Sayfa (Özet)";
+    private readonly Stack<(string Page, string Breadcrumb, string Filter)> _navHistory = new();
+
+    // Üst Bar Canlı Saat ve Sunucu Durumu
+    private string _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
+    private bool _serverOnline = true;
+    private System.Threading.Timer? _clockTimer;
+
+    // 1. Ana Sayfa Sayaçları
+    private int _totalCount;
+    private int _activeCount;
+    private int _passiveCount;
+
+    // 2. Yeni Kargo Alanları
+    private string _newSender = "";
+    private string _newReceiver = "";
+    private string _newLocation = "";
+    private DateTime _newDeliveryDate = DateTime.Today;
+    private string _addFeedback = "";
+    private bool _addSuccess;
+
+    // 3. Sorgulama ve Düzenleme Alanları
+    private string _trackingDigits = "";
+    private bool _showDetailEditCard;
+    private string _editTrackingNo = "";
+    private bool _editIsActive;
+    private string _editSender = "";
+    private string _editReceiver = "";
+    private string _editLocation = "";
+    private DateTime _editDeliveryDate = DateTime.Today;
+    private string _editStatus = "Hazırlanıyor";
+    private string _queryFeedback = "";
+    private bool _querySuccess;
+
+    // 4. Liste ve Sağ Özet Kartı Alanları
+    private string _currentFilter = "ALL";
+    private string _listHeaderTitle = "Tüm Kargolar Listesi";
+    private string _liveSearch = "";
+    private List<CargoStatusResponse> _cachedCargos = new();
+    private CargoStatusResponse? _selectedCargo;
+    private bool _copiedJustNow;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Canlı saat sayacı
+        _clockTimer = new System.Threading.Timer(_ =>
+        {
+            _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
+            InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+
+        await LoadSummaryCountsAsync();
+    }
+
+    // Geri Dönüş Destekli Sayfa Geçişi
+    private void NavigateTo(string targetPage, string breadcrumbText)
+    {
+        if (_activePage != targetPage)
+        {
+            _navHistory.Push((_activePage, _breadcrumb, _currentFilter));
+        }
+        _activePage = targetPage;
+        _breadcrumb = breadcrumbText;
+        _addFeedback = "";
+        _queryFeedback = "";
+    }
+
+    private async Task GoBackAsync()
+    {
+        if (_navHistory.Count == 0) return;
+        var prev = _navHistory.Pop();
+        _activePage = prev.Page;
+        _breadcrumb = prev.Breadcrumb;
+
+        if (_activePage == "HOME") await LoadSummaryCountsAsync();
+        else if (_activePage == "LIST") await LoadCargoListAsync(prev.Filter);
+    }
+
+    private void ResetQueryScreen()
+    {
+        _trackingDigits = "";
+        _showDetailEditCard = false;
+        _queryFeedback = "";
+    }
+
+    // 4 Hane ve Sadece Rakam Kısıtlaması
+    private void OnTrackingCodeInput(ChangeEventArgs e)
+    {
+        string raw = e.Value?.ToString() ?? "";
+        string digitsOnly = new string(raw.Where(char.IsDigit).Take(4).ToArray());
+        _trackingDigits = digitsOnly;
+    }
+
+    private async Task LoadSummaryCountsAsync()
+    {
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+            var response = await client.GetAllCargosAsync(new EmptyRequest());
+
+            _totalCount = response.Cargos.Count;
+            _activeCount = response.Cargos.Count(c => c.IsActive);
+            _passiveCount = response.Cargos.Count(c => !c.IsActive);
+            _serverOnline = true;
+        }
+        catch
+        {
+            _serverOnline = false;
+        }
+    }
+
+    private async Task CreateCargoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newSender) || string.IsNullOrWhiteSpace(_newReceiver))
+        {
+            _addSuccess = false;
+            _addFeedback = "Lütfen Gönderici ve Alıcı bilgilerini eksiksiz doldurun.";
+            return;
+        }
+
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+
+            var response = await client.CreateCargoAsync(new CreateCargoRequest
+            {
+                SenderName = _newSender.Trim(),
+                ReceiverName = _newReceiver.Trim(),
+                LastLocation = string.IsNullOrWhiteSpace(_newLocation) ? "Merkez Transfer Şubesi" : _newLocation.Trim(),
+                EstimatedDelivery = _newDeliveryDate.ToString("dd.MM.yyyy")
+            });
+
+            if (response.Success)
+            {
+                _addSuccess = true;
+                _addFeedback = $"Kargo başarıyla kaydedildi! Üretilen Takip Numarası: {response.GeneratedTrackingNumber}";
+                _newSender = "";
+                _newReceiver = "";
+                _newLocation = "";
+                _newDeliveryDate = DateTime.Today;
+                await LoadSummaryCountsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _addSuccess = false;
+            _addFeedback = $"Sunucu hatası: {ex.Message}";
+        }
+    }
+
+    private async Task SearchCargoByCodeAsync()
+    {
+        if (_trackingDigits.Length != 4)
+        {
+            _querySuccess = false;
+            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu eksiksiz girin (Örn: 1001).";
+            return;
+        }
+
+        await FetchCargoForEditAsync($"TR-{_trackingDigits}");
+    }
+
+    private async Task FetchCargoForEditAsync(string fullTrackNo)
+    {
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+
+            var res = await client.GetCargoStatusAsync(new CargoLookupRequest { TrackingNumber = fullTrackNo });
+            if (res.IsFound)
+            {
+                _editTrackingNo = res.TrackingNumber;
+                _editIsActive = res.IsActive;
+                _editSender = res.SenderName;
+                _editReceiver = res.ReceiverName;
+                _editLocation = res.LastLocation;
+                _editStatus = res.CurrentStatus;
+
+                if (DateTime.TryParseExact(res.EstimatedDelivery, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt))
+                    _editDeliveryDate = dt < DateTime.Today ? DateTime.Today : dt;
+                else
+                    _editDeliveryDate = DateTime.Today;
+
+                _showDetailEditCard = true;
+                _queryFeedback = "";
+            }
+            else
+            {
+                _showDetailEditCard = false;
+                _querySuccess = false;
+                _queryFeedback = $"{fullTrackNo} numaralı kargo sistemde bulunamadı.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _querySuccess = false;
+            _queryFeedback = $"Sorgulama hatası: {ex.Message}";
+        }
+    }
+
+    private async Task SaveEditedCargoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editSender) || string.IsNullOrWhiteSpace(_editReceiver))
+        {
+            _querySuccess = false;
+            _queryFeedback = "Gönderici ve Alıcı alanları boş bırakılamaz.";
+            return;
+        }
+
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+
+            var res = await client.UpdateCargoStatusAsync(new UpdateStatusRequest
+            {
+                TrackingNumber = _editTrackingNo,
+                SenderName = _editSender.Trim(),
+                ReceiverName = _editReceiver.Trim(),
+                LastLocation = _editLocation.Trim(),
+                EstimatedDelivery = _editDeliveryDate.ToString("dd.MM.yyyy"),
+                NewStatus = _editStatus
+            });
+
+            if (res.Success)
+            {
+                // Güncelleme bitince sorgu kartını kapat ve mesaj göster
+                ResetQueryScreen();
+                _querySuccess = true;
+                _queryFeedback = res.Message;
+                await LoadSummaryCountsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _querySuccess = false;
+            _queryFeedback = $"Güncelleme hatası: {ex.Message}";
+        }
+    }
+
+    private async Task LoadCargoListAsync(string filterMode)
+    {
+        _currentFilter = filterMode;
+        string subTitle = filterMode switch
+        {
+            "ACTIVE" => "Aktif Kargolar",
+            "PASSIVE" => "Pasif (Arşiv) Kargolar",
+            _ => "Tüm Kargolar"
+        };
+        _listHeaderTitle = $"{subTitle} Listesi";
+        _breadcrumb = $"Operasyon Merkezi  >  Kargo Listeleri  >  {subTitle}";
+
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+
+            var res = await client.GetAllCargosAsync(new EmptyRequest());
+            _cachedCargos = res.Cargos.ToList();
+
+            var firstItem = FilteredCargos.FirstOrDefault();
+            _selectedCargo = firstItem;
+        }
+        catch
+        {
+            _serverOnline = false;
+        }
+    }
+
+    private IEnumerable<CargoStatusResponse> FilteredCargos
+    {
+        get
+        {
+            IEnumerable<CargoStatusResponse> q = _cachedCargos;
+            if (_currentFilter == "ACTIVE") q = q.Where(c => c.IsActive);
+            else if (_currentFilter == "PASSIVE") q = q.Where(c => !c.IsActive);
+
+            if (!string.IsNullOrWhiteSpace(_liveSearch))
+            {
+                string s = _liveSearch.Trim().ToLower();
+                q = q.Where(c =>
+                    c.TrackingNumber.ToLower().Contains(s) ||
+                    c.SenderName.ToLower().Contains(s) ||
+                    c.ReceiverName.ToLower().Contains(s) ||
+                    c.LastLocation.ToLower().Contains(s));
+            }
+            return q;
+        }
+    }
+
+    private void SelectCargoForPreview(CargoStatusResponse cargo)
+    {
+        _selectedCargo = cargo;
+        _copiedJustNow = false;
+    }
+
+    private async Task CopySelectedTrackNoAsync()
+    {
+        if (_selectedCargo == null) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _selectedCargo.TrackingNumber);
+        _copiedJustNow = true;
+        StateHasChanged();
+
+        await Task.Delay(1200);
+        _copiedJustNow = false;
+        StateHasChanged();
+    }
+
+    private async Task OpenSelectedCargoInEditAsync()
+    {
+        if (_selectedCargo == null) return;
+        string digits = _selectedCargo.TrackingNumber.Replace("TR-", "");
+
+        NavigateTo("QUERY", $"Operasyon Merkezi  >  Düzenle ({_selectedCargo.TrackingNumber})");
+        _trackingDigits = digits;
+        await FetchCargoForEditAsync(_selectedCargo.TrackingNumber);
+    }
+
+    private string GetRowColorClass(string status) => status switch
+    {
+        "Teslim Edildi" => "row-delivered",
+        "İptal Edildi" => "row-cancelled",
+        "Yola Çıktı" => "row-transit",
+        _ => "row-prep"
+    };
+
+    public void Dispose()
+    {
+        _clockTimer?.Dispose();
+    }
+}

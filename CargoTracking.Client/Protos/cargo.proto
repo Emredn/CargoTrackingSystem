@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+option csharp_namespace = "CargoTracking.Grpc";
+
+package cargo;
+
+service CargoService {
+  // 1. Tekil Kargo Sorgulama
+  rpc GetCargoStatus (CargoLookupRequest) returns (CargoStatusResponse);
+  
+  // 2. Yeni Kargo Ekleme
+  rpc CreateCargo (CreateCargoRequest) returns (CreateCargoResponse);
+
+  // 3. YENİ: Tüm Kargoları Listeleme
+  rpc GetAllCargos (EmptyRequest) returns (CargoListResponse);
+
+  // 4. YENİ: Kargo Silme
+  rpc DeleteCargo (DeleteCargoRequest) returns (DeleteCargoResponse);
+}
+
+message CargoLookupRequest {
+  string tracking_number = 1;
+}
+
+message CargoStatusResponse {
+  bool is_found = 1;
+  string tracking_number = 2;
+  string sender_name = 3;
+  string receiver_name = 4;
+  string current_status = 5;
+  string last_location = 6;
+  string estimated_delivery = 7;
+}
+
+message CreateCargoRequest {
+  string sender_name = 1;
+  string receiver_name = 2;
+  string last_location = 3;
+  string estimated_delivery = 4;
+}
+
+message CreateCargoResponse {
+  bool success = 1;
+  string generated_tracking_number = 2;
+  string message = 3;
+}
+
+// --- YENİ EKLENEN MESAJ MODELLERİ ---
+
+// Listeleme yaparken parametre göndermeyeceğimiz için boş bir istek modeli tanımlıyoruz
+message EmptyRequest {}
+
+// "repeated" anahtar kelimesi C# tarafında RepeatedField<CargoStatusResponse> (yani bir Liste) üretir
+message CargoListResponse {
+  repeated CargoStatusResponse cargos = 1;
+}
+
+message DeleteCargoRequest {
+  string tracking_number = 1;
+}
+
+message DeleteCargoResponse {
+  bool success = 1;
+  string message = 2;
+}

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="CargoTracking.BlazorUI/CargoTracking.BlazorUI.csproj" Id="fbb30aa3-241c-42c0-a7f4-59f0f6dc3fa3" />
+  <Project Path="CargoTracking.Client/CargoTracking.Client.csproj" />
+  <Project Path="CargoTracking.DesktopUI/CargoTracking.DesktopUI.csproj" Id="8ca4efd2-d1aa-4eca-a178-12fea098f627" />
+  <Project Path="CargoTracking.Server/CargoTracking.Server.csproj" />
+</Solution>

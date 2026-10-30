@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+option csharp_namespace = "CargoTracking.Grpc";
+
+package cargo;
+
+service CargoService {
+  rpc GetCargoStatus (CargoLookupRequest) returns (CargoStatusResponse);
+  rpc CreateCargo (CreateCargoRequest) returns (CreateCargoResponse);
+  rpc GetAllCargos (EmptyRequest) returns (CargoListResponse);
+  rpc UpdateCargoStatus (UpdateStatusRequest) returns (UpdateStatusResponse);
+}
+
+message CargoLookupRequest {
+  string tracking_number = 1;
+}
+
+message CargoStatusResponse {
+  bool is_found = 1;
+  string tracking_number = 2;
+  string sender_name = 3;
+  string receiver_name = 4;
+  string current_status = 5;
+  string last_location = 6;
+  string estimated_delivery = 7;
+  bool is_active = 8;
+}
+
+message CreateCargoRequest {
+  string sender_name = 1;
+  string receiver_name = 2;
+  string last_location = 3;
+  string estimated_delivery = 4;
+}
+
+message CreateCargoResponse {
+  bool success = 1;
+  string generated_tracking_number = 2;
+  string message = 3;
+}
+
+message EmptyRequest {}
+
+message CargoListResponse {
+  repeated CargoStatusResponse cargos = 1;
+}
+
+// GÜNCELLENDİ: Artık tüm kargo detaylarını (isim, konum, tarih ve durum) düzenleyebiliyoruz!
+message UpdateStatusRequest {
+  string tracking_number = 1;
+  string new_status = 2;
+  string sender_name = 3;
+  string receiver_name = 4;
+  string last_location = 5;
+  string estimated_delivery = 6;
+}
+
+message UpdateStatusResponse {
+  bool success = 1;
+  string message = 2;
+}

@@ -1,0 +1,50 @@
+{
+  "LastTrackingId": 1011,
+  "Cargos": [
+    {
+      "TrackingNumber": "TR-1001",
+      "SenderName": "Emre Dindar",
+      "ReceiverName": "Ceyda G\u00FClmez",
+      "CurrentStatus": "Yola \u00C7\u0131kt\u0131",
+      "LastLocation": "\u0130stanbul / Kad\u0131k\u00F6y",
+      "EstimatedDelivery": "17.11.2026",
+      "IsActive": true
+    },
+    {
+      "TrackingNumber": "TR-1002",
+      "SenderName": "Trendyol",
+      "ReceiverName": "Fatih \u015Eahin",
+      "CurrentStatus": "Haz\u0131rlan\u0131yor",
+      "LastLocation": "Bursa Hasana\u011Fa",
+      "EstimatedDelivery": "23.10.2026",
+      "IsActive": true
+    },
+    {
+      "TrackingNumber": "TR-1009",
+      "SenderName": "a",
+      "ReceiverName": "a",
+      "CurrentStatus": "\u0130ptal Edildi",
+      "LastLocation": "s",
+      "EstimatedDelivery": "12.12.2026",
+      "IsActive": false
+    },
+    {
+      "TrackingNumber": "TR-1010",
+      "SenderName": "deneme",
+      "ReceiverName": "deneme soyad",
+      "CurrentStatus": "\u0130ptal Edildi",
+      "LastLocation": "adres",
+      "EstimatedDelivery": "17.11.2026",
+      "IsActive": false
+    },
+    {
+      "TrackingNumber": "TR-1011",
+      "SenderName": "Ahmet Aksu",
+      "ReceiverName": "Alper Uzun\u00F6z",
+      "CurrentStatus": "Teslim Edildi",
+      "LastLocation": "Bursa / Hasana\u011Fa",
+      "EstimatedDelivery": "27.10.2026",
+      "IsActive": false
+    }
+  ]
+}
