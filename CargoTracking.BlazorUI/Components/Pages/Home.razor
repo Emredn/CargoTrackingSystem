@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using CargoTracking.Grpc
 @using System.Globalization
+@using System.Text
 @implements IDisposable
 @inject IJSRuntime JSRuntime
 
@@ -9,7 +10,7 @@
 
 <div class="app-wrapper">
     <!-- SOL YAN MENÜ (SIDEBAR) -->
-    <aside class="sidebar">
+    <aside class="sidebar no-print">
         <div class="brand-header">
             <h1>KARGO PRO</h1>
             <p>Tek Merkez, Sıfır Kayıp,<br />Kesintisiz Lojistik Takip</p>
@@ -37,8 +38,8 @@
 
     <!-- SAĞ ANA BÖLGE -->
     <div class="main-area">
-        <!-- ÜST BAR: GERİ DÖN + EKMEK KIRINTISI (BREADCRUMB) + SUNUCU DURUMU + CANLI SAAT -->
-        <header class="top-header">
+        <!-- ÜST BAR -->
+        <header class="top-header no-print">
             <div class="header-left">
                 <button type="button" class="btn-back" disabled="@(_navHistory.Count == 0)" @onclick="GoBackAsync">
                     &lt; Geri Dön
@@ -136,7 +137,7 @@
                     <h2 class="page-title">Kargo Sorgulama ve Kayıt Düzenleme</h2>
 
                     <div class="panel-card" style="max-width: 740px; margin-bottom: 20px;">
-                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin (Sadece Rakam):</label>
+                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin (Sadece Rakam, Enter ile Sorgular):</label>
                         <div class="query-bar">
                             <span class="tr-prefix">TR -</span>
                             <input type="text"
@@ -144,6 +145,7 @@
                                    maxlength="4"
                                    value="@_trackingDigits"
                                    @oninput="OnTrackingCodeInput"
+                                   @onkeydown="OnTrackingCodeKeyDown"
                                    placeholder="1001" />
                             <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="SearchCargoByCodeAsync">
                                 KAYDI SORGULA
@@ -199,13 +201,13 @@
                 </div>
             }
 
-            <!-- 4. SAYFA: KARGO LİSTELERİ + SAĞDA TEK TIK ÖZET PANELİ -->
+            <!-- 4. SAYFA: KARGO LİSTELERİ -->
             @if (_activePage == "LIST")
             {
                 <div class="page-section">
                     <h2 class="page-title">@_listHeaderTitle</h2>
 
-                    <div class="filter-toolbar">
+                    <div class="filter-toolbar no-print">
                         <div class="tab-group">
                             <button type="button" class="filter-tab @(_currentFilter == "ALL" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("ALL")'>
                                 TÜM KARGOLAR
@@ -218,14 +220,23 @@
                             </button>
                         </div>
 
+                        <div class="export-actions" style="display: flex; gap: 8px;">
+                            <button type="button" class="btn-export btn-excel" @onclick="ExportFilteredListToExcelAsync">
+                                📊 EXCEL (CSV) İNDİR
+                            </button>
+                            <button type="button" class="btn-export btn-pdf" @onclick="ExportToPdfAsync">
+                                📄 PDF / YAZDIR
+                            </button>
+                        </div>
+
                         <div class="live-search-box">
                             <label>🔎 Hızlı Ara:</label>
-                            <input type="text" class="text-input" style="width:260px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, gönderici, alıcı, şube..." />
+                            <input type="text" class="text-input" style="width:230px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, şube..." />
                         </div>
                     </div>
 
                     <div class="list-split-layout">
-                        <!-- SOL: SABİT SÜTUNLU RENKLİ TABLO -->
+                        <!-- SOL: TABLO -->
                         <div class="table-wrapper">
                             <table class="enterprise-table">
                                 <thead>
@@ -263,8 +274,8 @@
                             </table>
                         </div>
 
-                        <!-- SAĞ: 1 KEZ TIKLAYINCA AÇILAN SEÇİLİ KARGO ÖZETİ VE KOPYALAMA KARTI -->
-                        <div class="quick-preview-panel">
+                        <!-- SAĞ: ÖZET VE İŞLEM PANELİ -->
+                        <div class="quick-preview-panel no-print">
                             <div class="qp-header">SEÇİLİ KARGO ÖZETİ</div>
                             @if (_selectedCargo != null)
                             {
@@ -413,7 +424,7 @@
         border-top: 1px solid #1e293b;
     }
 
-    /* ÜST BAR VE EKMEK KIRINTISI */
+    /* ÜST BAR */
     .main-area {
         flex: 1;
         display: flex;
@@ -500,7 +511,6 @@
         color: #64748b;
     }
 
-    /* ÖZET KARTLARI */
     .summary-cards {
         display: grid;
         grid-template-columns: repeat(3, 295px);
@@ -569,7 +579,6 @@
             color: #64748b;
         }
 
-    /* FORMLAR VE KARTLAR */
     .panel-card {
         background: #ffffff;
         border: 1px solid #cbd5e1;
@@ -660,6 +669,34 @@
         background: #ea580c;
     }
 
+    /* EXPORT BUTONLARI */
+    .btn-export {
+        border: none;
+        padding: 0 14px;
+        height: 38px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #ffffff;
+        border-radius: 2px;
+    }
+
+    .btn-excel {
+        background: #166534;
+    }
+
+        .btn-excel:hover {
+            background: #14532d;
+        }
+
+    .btn-pdf {
+        background: #991b1b;
+    }
+
+        .btn-pdf:hover {
+            background: #7f1d1d;
+        }
+
     .alert-box {
         padding: 10px 14px;
         font-size: 13px;
@@ -679,7 +716,6 @@
         border: 1px solid #fca5a5;
     }
 
-    /* LİSTE VE TABLO BÖLÜMÜ */
     .filter-toolbar {
         display: flex;
         align-items: center;
@@ -694,7 +730,7 @@
     }
 
     .filter-tab {
-        width: 165px;
+        width: 150px;
         height: 38px;
         border: none;
         background: #cbd5e1;
@@ -760,7 +796,6 @@
             cursor: pointer;
         }
 
-    /* DURUM RENKLERİ (Tıklanınca Mavi Olmaz, Kendi Renginde Kalır) */
     .row-prep {
         background: #fef9c3;
         color: #713f12;
@@ -787,7 +822,6 @@
         border-bottom: 2px solid #0f172a;
     }
 
-    /* SAĞ HIZLI ÖZET KARTI */
     .quick-preview-panel {
         width: 265px;
         background: #ffffff;
@@ -867,27 +901,50 @@
         color: #64748b;
         line-height: 1.5;
     }
+
+    /* YAZDIRMA (PDF) MODU */
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        .app-wrapper {
+            display: block;
+            height: auto;
+            overflow: visible;
+        }
+
+        .main-area, .page-content, .list-split-layout, .table-wrapper {
+            overflow: visible !important;
+            height: auto !important;
+        }
+
+        .enterprise-table {
+            border: 1px solid #000;
+        }
+
+            .enterprise-table th, .enterprise-table td {
+                border: 1px solid #ccc;
+                color: #000 !important;
+            }
+    }
 </style>
 
 @code {
     private readonly string _serverAddress = "http://localhost:5135";
 
-    // Sayfa ve Ekmek Kırıntısı (Breadcrumb) Geçmişi
     private string _activePage = "HOME";
     private string _breadcrumb = "Operasyon Merkezi  >  Ana Sayfa (Özet)";
     private readonly Stack<(string Page, string Breadcrumb, string Filter)> _navHistory = new();
 
-    // Üst Bar Canlı Saat ve Sunucu Durumu
     private string _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
     private bool _serverOnline = true;
     private System.Threading.Timer? _clockTimer;
 
-    // 1. Ana Sayfa Sayaçları
     private int _totalCount;
     private int _activeCount;
     private int _passiveCount;
 
-    // 2. Yeni Kargo Alanları
     private string _newSender = "";
     private string _newReceiver = "";
     private string _newLocation = "";
@@ -895,7 +952,6 @@
     private string _addFeedback = "";
     private bool _addSuccess;
 
-    // 3. Sorgulama ve Düzenleme Alanları
     private string _trackingDigits = "";
     private bool _showDetailEditCard;
     private string _editTrackingNo = "";
@@ -908,7 +964,6 @@
     private string _queryFeedback = "";
     private bool _querySuccess;
 
-    // 4. Liste ve Sağ Özet Kartı Alanları
     private string _currentFilter = "ALL";
     private string _listHeaderTitle = "Tüm Kargolar Listesi";
     private string _liveSearch = "";
@@ -918,7 +973,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Canlı saat sayacı
         _clockTimer = new System.Threading.Timer(_ =>
         {
             _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
@@ -928,7 +982,6 @@
         await LoadSummaryCountsAsync();
     }
 
-    // Geri Dönüş Destekli Sayfa Geçişi
     private void NavigateTo(string targetPage, string breadcrumbText)
     {
         if (_activePage != targetPage)
@@ -959,12 +1012,20 @@
         _queryFeedback = "";
     }
 
-    // 4 Hane ve Sadece Rakam Kısıtlaması
     private void OnTrackingCodeInput(ChangeEventArgs e)
     {
         string raw = e.Value?.ToString() ?? "";
         string digitsOnly = new string(raw.Where(char.IsDigit).Take(4).ToArray());
         _trackingDigits = digitsOnly;
+    }
+
+    // ENTER İLE SORGULAMA OLAYI
+    private async Task OnTrackingCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchCargoByCodeAsync();
+        }
     }
 
     private async Task LoadSummaryCountsAsync()
@@ -1103,7 +1164,6 @@
 
             if (res.Success)
             {
-                // Güncelleme bitince sorgu kartını kapat ve mesaj göster
                 ResetQueryScreen();
                 _querySuccess = true;
                 _queryFeedback = res.Message;
@@ -1193,6 +1253,46 @@
         NavigateTo("QUERY", $"Operasyon Merkezi  >  Düzenle ({_selectedCargo.TrackingNumber})");
         _trackingDigits = digits;
         await FetchCargoForEditAsync(_selectedCargo.TrackingNumber);
+    }
+
+    // EXCEL / CSV DIŞA AKTARMA
+    private async Task ExportFilteredListToExcelAsync()
+    {
+        var list = FilteredCargos.ToList();
+        if (!list.Any()) return;
+
+        var sb = new StringBuilder();
+        // Excel'in Türkçe karakterleri doğrudan düzgün okuması için noktalı virgül kullanılır
+        sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Son Konum / Şube;Teslim Tarihi");
+
+        foreach (var item in list)
+        {
+            sb.AppendLine($"{item.TrackingNumber};{item.SenderName};{item.ReceiverName};{item.CurrentStatus};{item.LastLocation};{item.EstimatedDelivery}");
+        }
+
+        // UTF-8 BOM ile Excel'e Türkçe karakter desteği verme
+        var utf8WithBom = new UTF8Encoding(true);
+        var bytes = utf8WithBom.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+
+        string fileName = $"Kargo_Raporu_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("eval", $@"
+            (() => {{
+                const link = document.createElement('a');
+                link.download = '{fileName}';
+                link.href = 'data:text/csv;charset=utf-8;base64,{base64}';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }})()
+        ");
+    }
+
+    // PDF OLARAK YAZDIRMA / İNDİRME
+    private async Task ExportToPdfAsync()
+    {
+        // Doğrudan sistemin PDF yazdırma dialogunu temiz şablonla tetikler
+        await JSRuntime.InvokeVoidAsync("window.print");
     }
 
     private string GetRowColorClass(string status) => status switch
