@@ -3,6 +3,8 @@
 @using CargoTracking.Grpc
 @using System.Globalization
 @using System.Text
+@using System.Text.Json
+@using System.Threading
 @implements IDisposable
 @inject IJSRuntime JSRuntime
 
@@ -17,8 +19,8 @@
         </div>
 
         <nav class="nav-list">
-            <button type="button" class="nav-btn @(_activePage == "HOME" ? "active" : "")" @onclick='() => NavigateTo("HOME", "Operasyon Merkezi  >  Ana Sayfa (Özet)")'>
-                ANA SAYFA (ÖZET)
+            <button type="button" class="nav-btn @(_activePage == "HOME" ? "active" : "")" @onclick='() => NavigateTo("HOME", "Operasyon Merkezi  >  Ana Sayfa")'>
+                ANA SAYFA
             </button>
             <button type="button" class="nav-btn @(_activePage == "ADD" ? "active" : "")" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  >  Yeni Kargo Kaydı")'>
                 YENİ KARGO KAYDI
@@ -28,6 +30,9 @@
             </button>
             <button type="button" class="nav-btn @(_activePage == "LIST" ? "active" : "")" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
                 KARGO LİSTELERİ
+            </button>
+            <button type="button" class="nav-btn @(_activePage == "LIVE_MAP" ? "active" : "")" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  >  Canlı Kurye ve Harita Takibi"); }'>
+                CANLI KARGO TAKİBİ
             </button>
         </nav>
 
@@ -57,7 +62,7 @@
         <!-- İÇERİK EKRANLARI -->
         <main class="page-content">
 
-            <!-- 1. SAYFA: ANA SAYFA (ÖZET) -->
+            <!-- 1. SAYFA: ANA SAYFA -->
             @if (_activePage == "HOME")
             {
                 <div class="page-section">
@@ -97,25 +102,51 @@
                 <div class="page-section">
                     <h2 class="page-title">Yeni Kargo Gönderimi Oluştur</h2>
 
-                    <div class="panel-card" style="max-width: 540px;">
+                    <div class="panel-card" style="max-width: 620px;">
                         @if (!string.IsNullOrEmpty(_addFeedback))
                         {
                             <div class="alert-box @(_addSuccess ? "alert-ok" : "alert-err")">@_addFeedback</div>
                         }
 
-                        <div class="field-group">
-                            <label>Gönderici Adı Soyadı / Kurum:</label>
-                            <input type="text" class="text-input" @bind="_newSender" placeholder="Örn: Emre Dindar" />
+                        <div class="grid-2col">
+                            <div class="field-group">
+                                <label>Gönderici Adı Soyadı / Kurum:</label>
+                                <input type="text" class="text-input" @bind="_newSender" />
+                            </div>
+
+                            <div class="field-group">
+                                <label>Alıcı Adı Soyadı:</label>
+                                <input type="text" class="text-input" @bind="_newReceiver" />
+                            </div>
+                        </div>
+
+                        <div class="grid-2col">
+                            <div class="field-group">
+                                <label>Teslimat İli:</label>
+                                <select class="text-input" value="@_newCity" @onchange="OnNewCityChanged">
+                                    <option value="">-- İl Seçiniz --</option>
+                                    @foreach (var prov in _provinces)
+                                    {
+                                        <option value="@prov.Name">@prov.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="field-group">
+                                <label>Teslimat İlçesi:</label>
+                                <select class="text-input" @bind="_newDistrict" disabled="@(string.IsNullOrEmpty(_newCity))">
+                                    <option value="">-- İlçe Seçiniz --</option>
+                                    @foreach (var dist in GetDistrictsForCity(_newCity))
+                                    {
+                                        <option value="@dist">@dist</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
 
                         <div class="field-group">
-                            <label>Alıcı Adı Soyadı:</label>
-                            <input type="text" class="text-input" @bind="_newReceiver" placeholder="Örn: Ceyda Gülmez" />
-                        </div>
-
-                        <div class="field-group">
-                            <label>Çıkış Şubesi / Son Konum:</label>
-                            <input type="text" class="text-input" @bind="_newLocation" placeholder="Örn: İstanbul / Kadıköy Şubesi" />
+                            <label>Mahalle, Cadde, Sokak ve Bina/Kapı No:</label>
+                            <input type="text" class="text-input" @bind="_newStreetDetail" />
                         </div>
 
                         <div class="field-group">
@@ -145,8 +176,7 @@
                                    maxlength="4"
                                    value="@_trackingDigits"
                                    @oninput="OnTrackingCodeInput"
-                                   @onkeydown="OnTrackingCodeKeyDown"
-                                   placeholder="1001" />
+                                   @onkeydown="OnTrackingCodeKeyDown" />
                             <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="SearchCargoByCodeAsync">
                                 KAYDI SORGULA
                             </button>
@@ -173,24 +203,50 @@
                                     <label>Alıcı Adı Soyadı:</label>
                                     <input type="text" class="text-input" @bind="_editReceiver" />
                                 </div>
+                            </div>
+
+                            <div class="grid-2col">
                                 <div class="field-group">
-                                    <label>Son Konum / Şube:</label>
-                                    <input type="text" class="text-input" @bind="_editLocation" />
+                                    <label>Teslimat İli:</label>
+                                    <select class="text-input" value="@_editCity" @onchange="OnEditCityChanged">
+                                        <option value="">-- İl Seçiniz --</option>
+                                        @foreach (var prov in _provinces)
+                                        {
+                                            <option value="@prov.Name">@prov.Name</option>
+                                        }
+                                    </select>
                                 </div>
+                                <div class="field-group">
+                                    <label>Teslimat İlçesi:</label>
+                                    <select class="text-input" @bind="_editDistrict" disabled="@(string.IsNullOrEmpty(_editCity))">
+                                        <option value="">-- İlçe Seçiniz --</option>
+                                        @foreach (var dist in GetDistrictsForCity(_editCity))
+                                        {
+                                            <option value="@dist">@dist</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="field-group">
+                                <label>Mahalle, Cadde, Sokak ve Kapı No:</label>
+                                <input type="text" class="text-input" @bind="_editStreetDetail" />
+                            </div>
+
+                            <div class="grid-2col">
                                 <div class="field-group">
                                     <label>Tahmini Teslim Tarihi:</label>
                                     <input type="date" class="text-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
                                 </div>
-                            </div>
-
-                            <div class="field-group" style="max-width: 340px;">
-                                <label>Operasyon Durumu:</label>
-                                <select class="text-input" @bind="_editStatus">
-                                    <option value="Hazırlanıyor">Hazırlanıyor</option>
-                                    <option value="Yola Çıktı">Yola Çıktı</option>
-                                    <option value="Teslim Edildi">Teslim Edildi</option>
-                                    <option value="İptal Edildi">İptal Edildi</option>
-                                </select>
+                                <div class="field-group">
+                                    <label>Operasyon Durumu:</label>
+                                    <select class="text-input" @bind="_editStatus">
+                                        <option value="Hazırlanıyor">Hazırlanıyor</option>
+                                        <option value="Yola Çıktı">Yola Çıktı</option>
+                                        <option value="Teslim Edildi">Teslim Edildi</option>
+                                        <option value="İptal Edildi">İptal Edildi</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <button type="button" class="btn-action btn-orange" @onclick="SaveEditedCargoAsync">
@@ -220,18 +276,18 @@
                             </button>
                         </div>
 
-                        <div class="export-actions" style="display: flex; gap: 8px;">
-                            <button type="button" class="btn-export btn-excel" @onclick="ExportFilteredListToExcelAsync">
-                                📊 EXCEL (CSV) İNDİR
+                        <div class="export-actions">
+                            <button type="button" class="btn-export btn-excel" @onclick="ExportFilteredListToExcelAsync" title="Excel formatında indir">
+                                📊 Excel
                             </button>
-                            <button type="button" class="btn-export btn-pdf" @onclick="ExportToPdfAsync">
-                                📄 PDF / YAZDIR
+                            <button type="button" class="btn-export btn-pdf" @onclick="ExportToPdfAsync" title="PDF olarak yazdır veya kaydet">
+                                📄 PDF
                             </button>
                         </div>
 
                         <div class="live-search-box">
                             <label>🔎 Hızlı Ara:</label>
-                            <input type="text" class="text-input" style="width:230px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, şube..." />
+                            <input type="text" class="text-input" style="width:230px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, il, ilçe..." />
                         </div>
                     </div>
 
@@ -245,7 +301,7 @@
                                         <th style="width: 140px;">Gönderici</th>
                                         <th style="width: 140px;">Alıcı</th>
                                         <th style="width: 125px;">Güncel Durum</th>
-                                        <th>Son Konum / Şube</th>
+                                        <th>Teslimat Adresi (İl / İlçe - Detay)</th>
                                         <th style="width: 110px;">Teslim Tarihi</th>
                                     </tr>
                                 </thead>
@@ -301,7 +357,7 @@
                                         <strong>@_selectedCargo.CurrentStatus</strong>
                                     </div>
                                     <div class="qp-item">
-                                        <span>SON KONUM / ŞUBE:</span>
+                                        <span>TESLİMAT ADRESİ:</span>
                                         <strong>@_selectedCargo.LastLocation</strong>
                                     </div>
                                     <div class="qp-item">
@@ -329,6 +385,57 @@
                 </div>
             }
 
+            <!-- 5. SAYFA: CANLI HARİTA VE KURYE TAKİBİ -->
+            @if (_activePage == "LIVE_MAP")
+            {
+                <div class="page-section">
+                    <h2 class="page-title">Canlı Kurye ve Rota Takip Merkezi</h2>
+                    <p class="page-subtitle">Yola çıkan tüm kargolar arka planda eşzamanlı ilerler. İstediğiniz kargo kodunu yazıp anlık konumuna bağlanabilirsiniz.</p>
+
+                    <div class="panel-card" style="max-width: 800px; margin-bottom: 20px;">
+                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin:</label>
+                        <div class="query-bar">
+                            <span class="tr-prefix">TR -</span>
+                            <input type="text"
+                                   class="code-box"
+                                   maxlength="4"
+                                   value="@_liveMapDigits"
+                                   @oninput="OnLiveMapInput"
+                                   @onkeydown="OnLiveMapKeyDown" />
+                            <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="StartLiveTrackingAsync">
+                                CANLI KONUMA BAĞLAN
+                            </button>
+                            @if (_isStreamRunning)
+                            {
+                                <button type="button" class="btn-action" style="width:auto; padding: 0 16px; background:#dc2626;" @onclick="() => StopLiveTracking(clearMessage: false)">
+                                    DURDUR
+                                </button>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_liveMapFeedback))
+                        {
+                            <div class="alert-box @(_liveMapSuccess ? "alert-ok" : "alert-err")" style="margin-top:14px;">
+                                @_liveMapFeedback
+                            </div>
+                        }
+                    </div>
+
+                    @if (_isMapVisible)
+                    {
+                        <div class="live-status-card" style="max-width: 800px; margin-bottom: 12px;">
+                            <div class="status-indicator">
+                                <span class="blink-dot"></span>
+                                <strong>@_courierName</strong>
+                            </div>
+                            <div class="status-text">@_liveStepMessage</div>
+                        </div>
+
+                        <div id="cargoMapBox" style="width: 100%; max-width: 800px; height: 420px; border: 2px solid #1e293b; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                    }
+                </div>
+            }
+
         </main>
     </div>
 </div>
@@ -353,7 +460,6 @@
         overflow: hidden;
     }
 
-    /* SOL YAN MENÜ */
     .sidebar {
         width: 255px;
         background: #0f172a;
@@ -424,7 +530,6 @@
         border-top: 1px solid #1e293b;
     }
 
-    /* ÜST BAR */
     .main-area {
         flex: 1;
         display: flex;
@@ -491,7 +596,6 @@
         color: #475569;
     }
 
-    /* İÇERİK ALANI */
     .page-content {
         flex: 1;
         padding: 26px 30px;
@@ -603,10 +707,16 @@
         font-size: 14px;
         border: 1px solid #94a3b8;
         outline: none;
+        background: #ffffff;
     }
 
         .text-input:focus {
             border-color: #1e40af;
+        }
+
+        .text-input:disabled {
+            background: #e2e8f0;
+            cursor: not-allowed;
         }
 
     .query-bar {
@@ -669,32 +779,42 @@
         background: #ea580c;
     }
 
-    /* EXPORT BUTONLARI */
+    .export-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
     .btn-export {
         border: none;
-        padding: 0 14px;
-        height: 38px;
-        font-size: 12px;
+        padding: 0 10px;
+        height: 28px;
+        font-size: 11px;
         font-weight: 700;
         cursor: pointer;
         color: #ffffff;
-        border-radius: 2px;
+        border-radius: 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        transition: background 0.15s ease-in-out;
     }
 
     .btn-excel {
-        background: #166534;
+        background: #15803d;
     }
 
         .btn-excel:hover {
-            background: #14532d;
+            background: #166534;
         }
 
     .btn-pdf {
-        background: #991b1b;
+        background: #b91c1c;
     }
 
         .btn-pdf:hover {
-            background: #7f1d1d;
+            background: #991b1b;
         }
 
     .alert-box {
@@ -902,7 +1022,56 @@
         line-height: 1.5;
     }
 
-    /* YAZDIRMA (PDF) MODU */
+    .live-status-card {
+        background: #0f172a;
+        color: #ffffff;
+        padding: 14px 18px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: #38bdf8;
+    }
+
+    .blink-dot {
+        width: 10px;
+        height: 10px;
+        background: #22c55e;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #22c55e;
+        animation: pulse 1.2s infinite;
+    }
+
+    @@keyframes pulse {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.3;
+            transform: scale(0.85);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .status-text {
+        font-size: 13px;
+        color: #e2e8f0;
+        font-style: italic;
+    }
+
     @@media print {
         .no-print {
             display: none !important;
@@ -932,14 +1101,24 @@
 
 @code {
     private readonly string _serverAddress = "http://localhost:5135";
+    private static readonly HttpClient _apiHttpClient = new();
+
+    public class ProvinceModel
+    {
+        public string Name { get; set; } = "";
+        public List<string> Districts { get; set; } = new();
+    }
+
+    private static List<ProvinceModel> _provinces = new();
 
     private string _activePage = "HOME";
-    private string _breadcrumb = "Operasyon Merkezi  >  Ana Sayfa (Özet)";
+    private string _breadcrumb = "Operasyon Merkezi  >  Ana Sayfa";
     private readonly Stack<(string Page, string Breadcrumb, string Filter)> _navHistory = new();
 
     private string _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
     private bool _serverOnline = true;
     private System.Threading.Timer? _clockTimer;
+    private int _tickCounter = 0;
 
     private int _totalCount;
     private int _activeCount;
@@ -947,7 +1126,9 @@
 
     private string _newSender = "";
     private string _newReceiver = "";
-    private string _newLocation = "";
+    private string _newCity = "";
+    private string _newDistrict = "";
+    private string _newStreetDetail = "";
     private DateTime _newDeliveryDate = DateTime.Today;
     private string _addFeedback = "";
     private bool _addSuccess;
@@ -958,7 +1139,9 @@
     private bool _editIsActive;
     private string _editSender = "";
     private string _editReceiver = "";
-    private string _editLocation = "";
+    private string _editCity = "";
+    private string _editDistrict = "";
+    private string _editStreetDetail = "";
     private DateTime _editDeliveryDate = DateTime.Today;
     private string _editStatus = "Hazırlanıyor";
     private string _queryFeedback = "";
@@ -971,15 +1154,98 @@
     private CargoStatusResponse? _selectedCargo;
     private bool _copiedJustNow;
 
+    private string _liveMapDigits = "";
+    private string _liveMapFeedback = "";
+    private bool _liveMapSuccess;
+    private bool _isStreamRunning;
+    private bool _isMapVisible;
+    private string _courierName = "Kurye";
+    private string _liveStepMessage = "";
+    private CancellationTokenSource? _streamCts;
+
     protected override async Task OnInitializedAsync()
     {
-        _clockTimer = new System.Threading.Timer(_ =>
+        _clockTimer = new System.Threading.Timer(async _ =>
         {
             _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
-            InvokeAsync(StateHasChanged);
+            _tickCounter++;
+
+            // Arka planda ilerleyen kargoları her 5 saniyede bir senkronize et
+            if (_tickCounter % 5 == 0)
+            {
+                await LoadSummaryCountsAsync();
+            }
+
+            await InvokeAsync(StateHasChanged);
         }, null, 1000, 1000);
 
+        await LoadTurkeyProvincesFromApiAsync();
         await LoadSummaryCountsAsync();
+    }
+
+    private async Task LoadTurkeyProvincesFromApiAsync()
+    {
+        if (_provinces.Any()) return;
+
+        try
+        {
+            string json = await _apiHttpClient.GetStringAsync("https://turkiyeapi.dev/api/v1/provinces");
+            using var doc = JsonDocument.Parse(json);
+            var dataArray = doc.RootElement.GetProperty("data");
+
+            var tempList = new List<ProvinceModel>();
+            foreach (var item in dataArray.EnumerateArray())
+            {
+                string provName = item.GetProperty("name").GetString() ?? "";
+                var distList = new List<string>();
+
+                if (item.TryGetProperty("districts", out var districtsElement))
+                {
+                    foreach (var d in districtsElement.EnumerateArray())
+                    {
+                        string dName = d.GetProperty("name").GetString() ?? "";
+                        if (!string.IsNullOrEmpty(dName)) distList.Add(dName);
+                    }
+                }
+
+                tempList.Add(new ProvinceModel
+                {
+                    Name = provName,
+                    Districts = distList.OrderBy(x => x).ToList()
+                });
+            }
+
+            _provinces = tempList.OrderBy(p => p.Name).ToList();
+        }
+        catch
+        {
+            _provinces = new List<ProvinceModel>
+            {
+                new() { Name = "Bursa", Districts = new() { "Nilüfer", "Osmangazi", "Yıldırım", "İnegöl", "Mudanya", "Gemlik" } },
+                new() { Name = "İstanbul", Districts = new() { "Kadıköy", "Üsküdar", "Beşiktaş", "Ataşehir", "Maltepe", "Şişli" } },
+                new() { Name = "Ankara", Districts = new() { "Çankaya", "Keçiören", "Yenimahalle", "Mamak", "Gölbaşı" } },
+                new() { Name = "İzmir", Districts = new() { "Konak", "Karşıyaka", "Bornova", "Buca", "Çiğli" } },
+                new() { Name = "Kütahya", Districts = new() { "Merkez", "Tavşanlı", "Simav", "Gediz" } }
+            };
+        }
+    }
+
+    private IEnumerable<string> GetDistrictsForCity(string cityName)
+    {
+        var prov = _provinces.FirstOrDefault(p => p.Name.Equals(cityName, StringComparison.OrdinalIgnoreCase));
+        return prov != null ? prov.Districts : Enumerable.Empty<string>();
+    }
+
+    private void OnNewCityChanged(ChangeEventArgs e)
+    {
+        _newCity = e.Value?.ToString() ?? "";
+        _newDistrict = "";
+    }
+
+    private void OnEditCityChanged(ChangeEventArgs e)
+    {
+        _editCity = e.Value?.ToString() ?? "";
+        _editDistrict = "";
     }
 
     private void NavigateTo(string targetPage, string breadcrumbText)
@@ -992,11 +1258,13 @@
         _breadcrumb = breadcrumbText;
         _addFeedback = "";
         _queryFeedback = "";
+        _liveMapFeedback = "";
     }
 
     private async Task GoBackAsync()
     {
         if (_navHistory.Count == 0) return;
+        StopLiveTracking(clearMessage: true);
         var prev = _navHistory.Pop();
         _activePage = prev.Page;
         _breadcrumb = prev.Breadcrumb;
@@ -1015,17 +1283,23 @@
     private void OnTrackingCodeInput(ChangeEventArgs e)
     {
         string raw = e.Value?.ToString() ?? "";
-        string digitsOnly = new string(raw.Where(char.IsDigit).Take(4).ToArray());
-        _trackingDigits = digitsOnly;
+        _trackingDigits = new string(raw.Where(char.IsDigit).Take(4).ToArray());
     }
 
-    // ENTER İLE SORGULAMA OLAYI
     private async Task OnTrackingCodeKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
-        {
-            await SearchCargoByCodeAsync();
-        }
+        if (e.Key == "Enter") await SearchCargoByCodeAsync();
+    }
+
+    private void OnLiveMapInput(ChangeEventArgs e)
+    {
+        string raw = e.Value?.ToString() ?? "";
+        _liveMapDigits = new string(raw.Where(char.IsDigit).Take(4).ToArray());
+    }
+
+    private async Task OnLiveMapKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await StartLiveTrackingAsync();
     }
 
     private async Task LoadSummaryCountsAsync()
@@ -1056,6 +1330,15 @@
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_newCity) || string.IsNullOrWhiteSpace(_newDistrict) || string.IsNullOrWhiteSpace(_newStreetDetail))
+        {
+            _addSuccess = false;
+            _addFeedback = "Lütfen İl, İlçe ve Açık Adres (Mahalle/Sokak) alanlarını eksiksiz seçin.";
+            return;
+        }
+
+        string structuredAddress = $"{_newCity.Trim()} / {_newDistrict.Trim()} - {_newStreetDetail.Trim()}";
+
         try
         {
             using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
@@ -1065,7 +1348,7 @@
             {
                 SenderName = _newSender.Trim(),
                 ReceiverName = _newReceiver.Trim(),
-                LastLocation = string.IsNullOrWhiteSpace(_newLocation) ? "Merkez Transfer Şubesi" : _newLocation.Trim(),
+                LastLocation = structuredAddress,
                 EstimatedDelivery = _newDeliveryDate.ToString("dd.MM.yyyy")
             });
 
@@ -1075,7 +1358,9 @@
                 _addFeedback = $"Kargo başarıyla kaydedildi! Üretilen Takip Numarası: {response.GeneratedTrackingNumber}";
                 _newSender = "";
                 _newReceiver = "";
-                _newLocation = "";
+                _newCity = "";
+                _newDistrict = "";
+                _newStreetDetail = "";
                 _newDeliveryDate = DateTime.Today;
                 await LoadSummaryCountsAsync();
             }
@@ -1092,7 +1377,7 @@
         if (_trackingDigits.Length != 4)
         {
             _querySuccess = false;
-            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu eksiksiz girin (Örn: 1001).";
+            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu eksiksiz girin.";
             return;
         }
 
@@ -1113,8 +1398,9 @@
                 _editIsActive = res.IsActive;
                 _editSender = res.SenderName;
                 _editReceiver = res.ReceiverName;
-                _editLocation = res.LastLocation;
                 _editStatus = res.CurrentStatus;
+
+                ParseStructuredAddress(res.LastLocation, out _editCity, out _editDistrict, out _editStreetDetail);
 
                 if (DateTime.TryParseExact(res.EstimatedDelivery, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt))
                     _editDeliveryDate = dt < DateTime.Today ? DateTime.Today : dt;
@@ -1138,6 +1424,34 @@
         }
     }
 
+    private void ParseStructuredAddress(string rawLocation, out string city, out string district, out string detail)
+    {
+        city = "Bursa";
+        district = "Nilüfer";
+        detail = rawLocation;
+
+        if (string.IsNullOrWhiteSpace(rawLocation)) return;
+
+        int dashIdx = rawLocation.IndexOf('-');
+        string leftPart = dashIdx > 0 ? rawLocation.Substring(0, dashIdx).Trim() : rawLocation;
+        detail = dashIdx > 0 ? rawLocation.Substring(dashIdx + 1).Trim() : rawLocation;
+
+        var slashParts = leftPart.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (slashParts.Length >= 2)
+        {
+            string candidateCity = slashParts[0].Trim();
+            string candidateDist = slashParts[1].Trim();
+
+            var matchedProv = _provinces.FirstOrDefault(p => p.Name.Equals(candidateCity, StringComparison.OrdinalIgnoreCase));
+            if (matchedProv != null)
+            {
+                city = matchedProv.Name;
+                var matchedDist = matchedProv.Districts.FirstOrDefault(d => d.Equals(candidateDist, StringComparison.OrdinalIgnoreCase));
+                district = matchedDist ?? matchedProv.Districts.FirstOrDefault() ?? "";
+            }
+        }
+    }
+
     private async Task SaveEditedCargoAsync()
     {
         if (string.IsNullOrWhiteSpace(_editSender) || string.IsNullOrWhiteSpace(_editReceiver))
@@ -1146,6 +1460,15 @@
             _queryFeedback = "Gönderici ve Alıcı alanları boş bırakılamaz.";
             return;
         }
+
+        if (string.IsNullOrWhiteSpace(_editCity) || string.IsNullOrWhiteSpace(_editDistrict) || string.IsNullOrWhiteSpace(_editStreetDetail))
+        {
+            _querySuccess = false;
+            _queryFeedback = "Lütfen İl, İlçe ve Mahalle/Sokak detayını eksiksiz doldurun.";
+            return;
+        }
+
+        string structuredAddress = $"{_editCity.Trim()} / {_editDistrict.Trim()} - {_editStreetDetail.Trim()}";
 
         try
         {
@@ -1157,7 +1480,7 @@
                 TrackingNumber = _editTrackingNo,
                 SenderName = _editSender.Trim(),
                 ReceiverName = _editReceiver.Trim(),
-                LastLocation = _editLocation.Trim(),
+                LastLocation = structuredAddress,
                 EstimatedDelivery = _editDeliveryDate.ToString("dd.MM.yyyy"),
                 NewStatus = _editStatus
             });
@@ -1255,22 +1578,144 @@
         await FetchCargoForEditAsync(_selectedCargo.TrackingNumber);
     }
 
-    // EXCEL / CSV DIŞA AKTARMA
+    private async Task StartLiveTrackingAsync()
+    {
+        if (_liveMapDigits.Length != 4)
+        {
+            _liveMapSuccess = false;
+            _liveMapFeedback = "Lütfen 4 haneli kargo takip kodunu girin.";
+            _isMapVisible = false;
+            return;
+        }
+
+        // Önceki izlemeyi sessizce kapat
+        StopLiveTracking(clearMessage: true);
+        await Task.Delay(40);
+
+        var localCts = new CancellationTokenSource();
+        _streamCts = localCts;
+
+        string targetTrackNo = $"TR-{_liveMapDigits}";
+        _isStreamRunning = true;
+        _liveMapFeedback = $"{targetTrackNo} için canlı GPS akışına bağlanılıyor...";
+        _liveMapSuccess = true;
+        StateHasChanged();
+
+        try
+        {
+            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
+            var client = new CargoService.CargoServiceClient(channel);
+
+            using var call = client.StreamCourierLocation(
+                new CargoLookupRequest { TrackingNumber = targetTrackNo },
+                cancellationToken: localCts.Token);
+
+            bool isFirstCoordinate = true;
+
+            while (await call.ResponseStream.MoveNext(localCts.Token))
+            {
+                var update = call.ResponseStream.Current;
+
+                if (update.Latitude == 0 && update.Longitude == 0)
+                {
+                    _liveMapSuccess = false;
+                    _liveMapFeedback = update.CurrentStepText;
+                    _isMapVisible = false;
+                    _isStreamRunning = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                _isMapVisible = true;
+                _courierName = update.CourierName;
+                _liveStepMessage = update.CurrentStepText;
+                _liveMapFeedback = $"Şu an canlı izlenen kargo: {targetTrackNo} (Diğer kargolar arka planda ilerlemeye devam ediyor)";
+                _liveMapSuccess = true;
+                StateHasChanged();
+
+                if (isFirstCoordinate)
+                {
+                    await Task.Delay(120);
+                    await JSRuntime.InvokeVoidAsync(
+                        "initCargoTrackingMap",
+                        "cargoMapBox",
+                        update.StartLat,
+                        update.StartLng,
+                        update.EndLat,
+                        update.EndLng,
+                        update.Latitude,
+                        update.Longitude);
+                    isFirstCoordinate = false;
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("updateCourierLocationOnMap", update.Latitude, update.Longitude);
+                }
+
+                if (update.IsDelivered)
+                {
+                    _liveMapSuccess = true;
+                    _liveMapFeedback = $"{targetTrackNo} teslimat adresine ulaştı ve arşivlendi!";
+                    await LoadSummaryCountsAsync();
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Eğer iptal işlemi kullanıcıdan ("Durdur" veya başka kargo aratma) kaynaklandıysa kesinlikle hata basma!
+            if (localCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            _liveMapSuccess = false;
+            _liveMapFeedback = $"Bağlantı uyarısı: {ex.Message}";
+        }
+        finally
+        {
+            if (_streamCts == localCts)
+            {
+                _isStreamRunning = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void StopLiveTracking(bool clearMessage = false)
+    {
+        if (_streamCts != null)
+        {
+            try { _streamCts.Cancel(); } catch { }
+            _streamCts.Dispose();
+            _streamCts = null;
+        }
+        _isStreamRunning = false;
+
+        if (clearMessage)
+        {
+            _liveMapFeedback = "";
+        }
+        else
+        {
+            _liveMapSuccess = true;
+            _liveMapFeedback = "Canlı izleme durduruldu. Kuryeler arka planda rotalarında ilerlemeye devam ediyor.";
+        }
+    }
+
     private async Task ExportFilteredListToExcelAsync()
     {
         var list = FilteredCargos.ToList();
         if (!list.Any()) return;
 
         var sb = new StringBuilder();
-        // Excel'in Türkçe karakterleri doğrudan düzgün okuması için noktalı virgül kullanılır
-        sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Son Konum / Şube;Teslim Tarihi");
+        sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Teslimat Adresi;Teslim Tarihi");
 
         foreach (var item in list)
         {
             sb.AppendLine($"{item.TrackingNumber};{item.SenderName};{item.ReceiverName};{item.CurrentStatus};{item.LastLocation};{item.EstimatedDelivery}");
         }
 
-        // UTF-8 BOM ile Excel'e Türkçe karakter desteği verme
         var utf8WithBom = new UTF8Encoding(true);
         var bytes = utf8WithBom.GetBytes(sb.ToString());
         var base64 = Convert.ToBase64String(bytes);
@@ -1288,10 +1733,8 @@
         ");
     }
 
-    // PDF OLARAK YAZDIRMA / İNDİRME
     private async Task ExportToPdfAsync()
     {
-        // Doğrudan sistemin PDF yazdırma dialogunu temiz şablonla tetikler
         await JSRuntime.InvokeVoidAsync("window.print");
     }
 
@@ -1305,6 +1748,7 @@
 
     public void Dispose()
     {
+        StopLiveTracking(clearMessage: true);
         _clockTimer?.Dispose();
     }
 }

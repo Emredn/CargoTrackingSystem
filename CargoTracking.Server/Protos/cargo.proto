@@ -9,6 +9,8 @@ service CargoService {
   rpc CreateCargo (CreateCargoRequest) returns (CreateCargoResponse);
   rpc GetAllCargos (EmptyRequest) returns (CargoListResponse);
   rpc UpdateCargoStatus (UpdateStatusRequest) returns (UpdateStatusResponse);
+  // CANLI KURYE AKIŞI METODU:
+  rpc StreamCourierLocation (CargoLookupRequest) returns (stream LiveCourierLocation);
 }
 
 message CargoLookupRequest {
@@ -58,4 +60,18 @@ message UpdateStatusRequest {
 message UpdateStatusResponse {
   bool success = 1;
   string message = 2;
+}
+
+// Kuryenin anlık konumu, çıkış şubesi ve varış adresi koordinatlarını taşıyan paket
+message LiveCourierLocation {
+  string trackingNumber = 1;
+  double latitude = 2;
+  double longitude = 3;
+  string courierName = 4;
+  string currentStepText = 5;
+  bool isDelivered = 6;
+  double startLat = 7;
+  double startLng = 8;
+  double endLat = 9;
+  double endLng = 10;
 }
