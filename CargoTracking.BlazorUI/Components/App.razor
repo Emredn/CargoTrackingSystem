@@ -1,10 +1,19 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
-
+<html lang="tr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+
+    <!-- PWA MANİFEST VE MOBİL TEMA -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
+
+    <!-- KURUMSAL INTER FONT AİLESİ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
@@ -13,14 +22,26 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- HARİTA GECE MODU FİLTRESİ (API KEY GEREKTİRMEZ, %100 ÜCRETSİZ OSM KULLANIR) -->
+    <style>
+        .kp-dark-tiles {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+        .leaflet-container {
+            background: #0f172a !important;
+        }
+    </style>
 </head>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let cargoMap = null;
     let courierMarker = null;
     let routePolyline = null;
+    let currentTileLayer = null;
 
-    window.initCargoTrackingMap = async (elementId, startLat, startLng, destLat, destLng, currentLat, currentLng) => {
+    window.initCargoTrackingMap = async (elementId, startLat, startLng, destLat, destLng, currentLat, currentLng, isDarkMode) => {
         const container = document.getElementById(elementId);
         if (!container) return;
 
@@ -31,23 +52,17 @@
 
         cargoMap = L.map(elementId).setView([currentLat, currentLng], 13);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
+        // Her zaman ücretsiz olan resmi OpenStreetMap katmanı
+        currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+            className: isDarkMode ? 'kp-dark-tiles' : ''
         }).addTo(cargoMap);
 
-        // Çıkış Şubesi Pini
-        L.marker([startLat, startLng]).addTo(cargoMap)
-            .bindPopup("<b>Çıkış Transfer Şubesi</b>");
+        L.marker([startLat, startLng]).addTo(cargoMap).bindPopup("<b>Çıkış Transfer Merkezi</b>");
+        L.marker([destLat, destLng]).addTo(cargoMap).bindPopup("<b>Teslimat Adresi</b>").openPopup();
+        courierMarker = L.marker([currentLat, currentLng]).addTo(cargoMap).bindPopup("<b>Kurye Sahada</b>");
 
-        // Teslimat Adresi Pini
-        L.marker([destLat, destLng]).addTo(cargoMap)
-            .bindPopup("<b>Teslimat Adresi</b>").openPopup();
-
-        // Kurye Pini
-        courierMarker = L.marker([currentLat, currentLng]).addTo(cargoMap)
-            .bindPopup("<b>Kurye Dağıtımda</b>");
-
-        // OSRM (En Kısa Yol / Yöneylem Motoru) ile gerçek sokak rotasını çiz
         try {
             const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`;
             const response = await fetch(url);
@@ -55,17 +70,34 @@
 
             if (data.routes && data.routes.length > 0) {
                 const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                routePolyline = L.polyline(coords, { color: '#1e40af', weight: 5 }).addTo(cargoMap);
+                let lineColor = isDarkMode ? '#38bdf8' : '#2563eb';
+                routePolyline = L.polyline(coords, { color: lineColor, weight: 5 }).addTo(cargoMap);
                 cargoMap.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
                 return;
             }
         } catch (e) {
-            console.warn("OSRM rota hatası, düz çizgiye dönülüyor:", e);
+            console.warn("OSRM rota hatası:", e);
         }
 
-        // İnternet/OSRM erişimi olmazsa yedek çizgi
-        routePolyline = L.polyline([[startLat, startLng], [destLat, destLng]], { color: '#1e40af', weight: 4, dashArray: '6, 8' }).addTo(cargoMap);
+        routePolyline = L.polyline([[startLat, startLng], [destLat, destLng]], { color: '#2563eb', weight: 4 }).addTo(cargoMap);
         cargoMap.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
+    };
+
+    window.setMapTheme = (isDarkMode) => {
+        if (!cargoMap || !currentTileLayer) return;
+
+        const tileContainer = currentTileLayer.getContainer();
+        if (tileContainer) {
+            if (isDarkMode) {
+                tileContainer.classList.add('kp-dark-tiles');
+            } else {
+                tileContainer.classList.remove('kp-dark-tiles');
+            }
+        }
+
+        if (routePolyline) {
+            routePolyline.setStyle({ color: isDarkMode ? '#38bdf8' : '#2563eb' });
+        }
     };
 
     window.updateCourierLocationOnMap = (lat, lng) => {
@@ -74,10 +106,10 @@
         }
     };
 </script>
+
 <body>
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
-
 </html>

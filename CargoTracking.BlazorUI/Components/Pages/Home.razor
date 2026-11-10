@@ -10,88 +10,256 @@
 
 <PageTitle>KARGO PRO | Kurumsal Lojistik ve Operasyon Yönetim Sistemi</PageTitle>
 
-<div class="app-wrapper">
-    <!-- SOL YAN MENÜ (SIDEBAR) -->
-    <aside class="sidebar no-print">
-        <div class="brand-header">
-            <h1>KARGO PRO</h1>
-            <p>Tek Merkez, Sıfır Kayıp,<br />Kesintisiz Lojistik Takip</p>
+<div class="kp-app @(_isDarkMode ? "kp-dark" : "kp-light")">
+
+    <!-- SAĞ ÜST KÖŞE KURUMSAL TOAST BİLDİRİMLERİ -->
+    <div class="kp-toast-stack no-print">
+        @foreach (var toast in _toasts)
+        {
+            <div class="kp-toast @(toast.IsSuccess ? "kp-toast-ok" : "kp-toast-err")">
+                <div class="kp-toast-indicator"></div>
+                <div class="kp-toast-content">
+                    <strong>@(toast.IsSuccess ? "OPERASYON ONAYI" : "SİSTEM UYARISI")</strong>
+                    <span>@toast.Message</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- SOL YAN MENÜ (ENTERPRISE SIDEBAR) -->
+    <aside class="kp-sidebar no-print">
+        <div class="kp-brand">
+            <div class="kp-logo-box">KP</div>
+            <div>
+                <h1>KARGO PRO</h1>
+                <span>KURUMSAL LOJİSTİK AĞI</span>
+            </div>
         </div>
 
-        <nav class="nav-list">
-            <button type="button" class="nav-btn @(_activePage == "HOME" ? "active" : "")" @onclick='() => NavigateTo("HOME", "Operasyon Merkezi  >  Ana Sayfa")'>
-                ANA SAYFA
+        <div class="kp-nav-group-title">OPERASYON MERKEZİ</div>
+        <nav class="kp-nav">
+            <button type="button" class="kp-nav-item @(_activePage == "HOME" ? "active" : "")" @onclick='async () => { NavigateTo("HOME", "Operasyon Merkezi  /  Ana Sayfa"); await LoadSummaryCountsAsync(); }'>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <span>ANA SAYFA</span>
             </button>
-            <button type="button" class="nav-btn @(_activePage == "ADD" ? "active" : "")" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  >  Yeni Kargo Kaydı")'>
-                YENİ KARGO KAYDI
+
+            <button type="button" class="kp-nav-item @(_activePage == "ADD" ? "active" : "")" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  /  Yeni Kargo Kaydı")'>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>YENİ KARGO KAYDI</span>
             </button>
-            <button type="button" class="nav-btn @(_activePage == "QUERY" ? "active" : "")" @onclick='() => { ResetQueryScreen(); NavigateTo("QUERY", "Operasyon Merkezi  >  Kargo Sorgula ve Düzenle"); }'>
-                SORGULA VE DÜZENLE
+
+            <button type="button" class="kp-nav-item @(_activePage == "QUERY" ? "active" : "")" @onclick='() => { ResetQueryScreen(); NavigateTo("QUERY", "Operasyon Merkezi  /  Sorgula ve Düzenle"); }'>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>SORGULA VE DÜZENLE</span>
             </button>
-            <button type="button" class="nav-btn @(_activePage == "LIST" ? "active" : "")" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
-                KARGO LİSTELERİ
+
+            <button type="button" class="kp-nav-item @(_activePage == "LIST" ? "active" : "")" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Kargo Listeleri"); await LoadCargoListAsync("ALL"); }'>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                <span>KARGO LİSTELERİ</span>
             </button>
-            <button type="button" class="nav-btn @(_activePage == "LIVE_MAP" ? "active" : "")" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  >  Canlı Kurye ve Harita Takibi"); }'>
-                CANLI KARGO TAKİBİ
+
+            <button type="button" class="kp-nav-item @(_activePage == "LIVE_MAP" ? "active" : "")" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+                <span>CANLI KARGO TAKİBİ</span>
+                @if (_inTransitCount > 0)
+                {
+                    <span class="kp-nav-pill">@_inTransitCount</span>
+                }
             </button>
         </nav>
 
-        <div class="sidebar-footer">
-            Kurumsal Operasyon Ağı v2.4<br />Yeni Nesil Dağıtık Kargo Mimarisi
+        <div class="kp-sidebar-bottom">
+            <div class="kp-sys-box">
+                <div class="kp-sys-row">
+                    <span>Rota Motoru</span>
+                    <strong>OSRM / Dijkstra</strong>
+                </div>
+                <div class="kp-sys-row">
+                    <span>İletişim Katmanı</span>
+                    <strong>gRPC HTTP/2</strong>
+                </div>
+            </div>
+            <div class="kp-copyright">Kargo Pro Enterprise v3.0</div>
         </div>
     </aside>
 
     <!-- SAĞ ANA BÖLGE -->
-    <div class="main-area">
-        <!-- ÜST BAR -->
-        <header class="top-header no-print">
-            <div class="header-left">
-                <button type="button" class="btn-back" disabled="@(_navHistory.Count == 0)" @onclick="GoBackAsync">
-                    &lt; Geri Dön
+    <div class="kp-main">
+        <!-- ÜST KURUMSAL BAR -->
+        <header class="kp-topbar no-print">
+            <div class="kp-topbar-left">
+                <button type="button" class="kp-btn-back" disabled="@(_navHistory.Count == 0)" @onclick="GoBackAsync">
+                    ← Geri
                 </button>
-                <span class="breadcrumb-text">@_breadcrumb</span>
+                <div class="kp-breadcrumb">@_breadcrumb</div>
             </div>
-            <div class="header-right">
-                <span class="server-badge @(_serverOnline ? "online" : "offline")">
-                    ● gRPC Sunucu: @(_serverOnline ? "Aktif (5135)" : "Bağlantı Yok")
-                </span>
-                <span class="live-clock">@_clockText</span>
+
+            <div class="kp-topbar-right">
+                <div class="kp-status-pill @(_serverOnline ? "online" : "offline")">
+                    <span class="kp-dot"></span>
+                    @(_serverOnline ? "gRPC Sunucu Aktif (5135)" : "Sunucu Bağlantısı Yok")
+                </div>
+
+                <div class="kp-clock-pill">@_clockText</div>
+
+                <button type="button" class="kp-theme-btn" @onclick="ToggleThemeAsync">
+                    @if (_isDarkMode)
+                    {
+                        <span>☀️ Gündüz Modu</span>
+                    }
+                    else
+                    {
+                        <span>🌙 Gece Modu</span>
+                    }
+                </button>
             </div>
         </header>
 
-        <!-- İÇERİK EKRANLARI -->
-        <main class="page-content">
+        <!-- SAYFA İÇERİĞİ -->
+        <main class="kp-content">
 
-            <!-- 1. SAYFA: ANA SAYFA -->
+            <!-- 1. SAYFA: ANA SAYFA (KURUMSAL COMMAND CENTER) -->
             @if (_activePage == "HOME")
             {
-                <div class="page-section">
-                    <h2 class="page-title">Operasyon Kontrol Merkezi</h2>
-                    <p class="page-subtitle">İlgili kargo listesini doğrudan görüntülemek için aşağıdaki özet kartların üzerine tıklayabilirsiniz.</p>
-
-                    <div class="summary-cards">
-                        <div class="summary-card card-blue" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
-                            <div class="sc-title">TÜM KAYITLI KARGOLAR</div>
-                            <div class="sc-count">@_totalCount</div>
-                            <div class="sc-link">Tüm listeyi açmak için tıklayın &gt;</div>
+                <div class="kp-dashboard">
+                    <!-- ÜST BANNER -->
+                    <div class="kp-hero-banner">
+                        <div>
+                            <span class="kp-hero-tag">MERKEZİ LOJİSTİK KOMUTA PANELİ</span>
+                            <h2>Ulusal Dağıtım ve Canlı Filo Yönetim Merkezi</h2>
+                            <p>Tüm şube çıkışlarını, sahadaki aktif kurye rotalarını ve teslimat performansını gerçek zamanlı denetleyin.</p>
                         </div>
-
-                        <div class="summary-card card-green" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Aktif Kargolar"); await LoadCargoListAsync("ACTIVE"); }'>
-                            <div class="sc-title">AKTİF (OPERASYONDAKİ) KARGOLAR</div>
-                            <div class="sc-count">@_activeCount</div>
-                            <div class="sc-link">Sadece aktif kargoları görmek için tıklayın &gt;</div>
-                        </div>
-
-                        <div class="summary-card card-slate" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  >  Kargo Listeleri  >  Pasif (Arşiv)"); await LoadCargoListAsync("PASSIVE"); }'>
-                            <div class="sc-title">PASİF (ARŞİVLENMİŞ) KARGOLAR</div>
-                            <div class="sc-count">@_passiveCount</div>
-                            <div class="sc-link">Teslim ve iptal kayıtları için tıklayın &gt;</div>
+                        <div class="kp-hero-actions">
+                            <button type="button" class="kp-btn kp-btn-primary" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  /  Yeni Kargo Kaydı")'>
+                                + Yeni Sevkiyat Oluştur
+                            </button>
+                            <button type="button" class="kp-btn kp-btn-outline" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
+                                Canlı Haritayı Aç
+                            </button>
                         </div>
                     </div>
 
-                    <div class="slogan-box">
-                        <h3>"Hız, Güven ve Tam İzlenebilirlik: Tüm Kargo Operasyonunuz Tek Çatı Altında."</h3>
-                        <p>KARGO PRO altyapısı ile şubeler arası gönderi takibini gerçek zamanlı yönetin, geçmişe dönük arşiv kayıtlarını sıfır veri kaybıyla denetleyin.</p>
+                    <!-- 4'LÜ KURUMSAL KPI KARTLARI -->
+                    <div class="kp-kpi-grid">
+                        <div class="kp-kpi-card kpi-blue" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
+                            <div class="kp-kpi-top">
+                                <span>TOPLAM SEVKİYAT HACMİ</span>
+                                <div class="kp-kpi-icon">📦</div>
+                            </div>
+                            <div class="kp-kpi-value">@_totalCount</div>
+                            <div class="kp-kpi-bar"><div style="width: 100%; background:#3b82f6;"></div></div>
+                            <div class="kp-kpi-foot">Tüm kayıtları incelemek için tıklayın →</div>
+                        </div>
+
+                        <div class="kp-kpi-card kpi-emerald" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Aktif Kargolar"); await LoadCargoListAsync("ACTIVE"); }'>
+                            <div class="kp-kpi-top">
+                                <span>AKTİF OPERASYONDAKİLER</span>
+                                <div class="kp-kpi-icon">⚡</div>
+                            </div>
+                            <div class="kp-kpi-value">@_activeCount</div>
+                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_activeCount))%; background:#10b981;"></div></div>
+                            <div class="kp-kpi-foot">Operasyon oranı: %@GetPercentage(_activeCount) →</div>
+                        </div>
+
+                        <div class="kp-kpi-card kpi-cyan" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
+                            <div class="kp-kpi-top">
+                                <span>SAHADA YOLA ÇIKAN (CANLI)</span>
+                                <div class="kp-kpi-icon">🚚</div>
+                            </div>
+                            <div class="kp-kpi-value">@_inTransitCount</div>
+                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_inTransitCount))%; background:#06b6d4;"></div></div>
+                            <div class="kp-kpi-foot">Canlı GPS radarına bağlan →</div>
+                        </div>
+
+                        <div class="kp-kpi-card kpi-slate" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Pasif (Arşiv)"); await LoadCargoListAsync("PASSIVE"); }'>
+                            <div class="kp-kpi-top">
+                                <span>TAMAMLANAN / ARŞİV</span>
+                                <div class="kp-kpi-icon">✓</div>
+                            </div>
+                            <div class="kp-kpi-value">@_passiveCount</div>
+                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_passiveCount))%; background:#64748b;"></div></div>
+                            <div class="kp-kpi-foot">Tamamlanma oranı: %@GetPercentage(_passiveCount) →</div>
+                        </div>
+                    </div>
+
+                    <!-- ALT İKİLİ KURUMSAL PANELLER -->
+                    <div class="kp-dash-split">
+                        <!-- SOL: SON SEVKIYAT HAREKETLERİ TABLOSU -->
+                        <div class="kp-card">
+                            <div class="kp-card-header">
+                                <div>
+                                    <h3>Son Kaydedilen Sevkiyat Hareketleri</h3>
+                                    <p>Sistemdeki son 5 kargo kaydının anlık operasyon özeti</p>
+                                </div>
+                                <button type="button" class="kp-link-btn" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
+                                    Tümünü Gör →
+                                </button>
+                            </div>
+                            <div class="kp-table-box">
+                                <table class="kp-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Takip Kodu</th>
+                                            <th>Gönderici / Alıcı</th>
+                                            <th>Teslimat Bölgesi</th>
+                                            <th>Statü</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _cachedCargos.TakeLast(5).Reverse())
+                                        {
+                                            <tr @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); SelectCargoForPreview(item); }'>
+                                                <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
+                                                <td>@item.SenderName → @item.ReceiverName</td>
+                                                <td>@item.LastLocation</td>
+                                                <td>
+                                                    <span class="kp-badge @GetBadgeClass(item.CurrentStatus)">
+                                                        ● @item.CurrentStatus
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- SAĞ: SAHADAKİ CANLI KURYE FİLOSU -->
+                        <div class="kp-card">
+                            <div class="kp-card-header">
+                                <div>
+                                    <h3>Canlı Dağıtım Filosu (Yoldakiler)</h3>
+                                    <p>Şu anda sahada hareket halinde olan aktif kuryeler</p>
+                                </div>
+                            </div>
+                            <div class="kp-fleet-list">
+                                @if (!_cachedCargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
+                                {
+                                    <div class="kp-empty-state">
+                                        Şu anda "Yola Çıktı" statüsünde sahada kurye bulunmuyor. Sorgula ve Düzenle ekranından bir kargoyu yola çıkarabilirsiniz.
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var activeItem in _cachedCargos.Where(c => c.CurrentStatus == "Yola Çıktı"))
+                                    {
+                                        <div class="kp-fleet-item">
+                                            <div class="kp-fleet-info">
+                                                <div class="kp-fleet-code">
+                                                    <span class="kp-pulse-dot"></span>
+                                                    <strong>@activeItem.TrackingNumber</strong>
+                                                </div>
+                                                <div class="kp-fleet-route">@activeItem.LastLocation</div>
+                                                <div class="kp-fleet-rec">Alıcı: @activeItem.ReceiverName</div>
+                                            </div>
+                                            <button type="button" class="kp-btn kp-btn-sm kp-btn-primary" @onclick="() => JumpToLiveMapAsync(activeItem.TrackingNumber)">
+                                                Haritada İzle →
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
                     </div>
                 </div>
             }
@@ -99,116 +267,32 @@
             <!-- 2. SAYFA: YENİ KARGO KAYDI -->
             @if (_activePage == "ADD")
             {
-                <div class="page-section">
-                    <h2 class="page-title">Yeni Kargo Gönderimi Oluştur</h2>
-
-                    <div class="panel-card" style="max-width: 620px;">
-                        @if (!string.IsNullOrEmpty(_addFeedback))
-                        {
-                            <div class="alert-box @(_addSuccess ? "alert-ok" : "alert-err")">@_addFeedback</div>
-                        }
-
-                        <div class="grid-2col">
-                            <div class="field-group">
-                                <label>Gönderici Adı Soyadı / Kurum:</label>
-                                <input type="text" class="text-input" @bind="_newSender" />
-                            </div>
-
-                            <div class="field-group">
-                                <label>Alıcı Adı Soyadı:</label>
-                                <input type="text" class="text-input" @bind="_newReceiver" />
+                <div class="kp-form-container">
+                    <div class="kp-card">
+                        <div class="kp-card-header">
+                            <div>
+                                <h3>Yeni Kurumsal Kargo Sevkiyat Kaydı</h3>
+                                <p>Gönderici, alıcı ve kilitli il/ilçe teslimat bilgilerini eksiksiz giriniz.</p>
                             </div>
                         </div>
 
-                        <div class="grid-2col">
-                            <div class="field-group">
-                                <label>Teslimat İli:</label>
-                                <select class="text-input" value="@_newCity" @onchange="OnNewCityChanged">
-                                    <option value="">-- İl Seçiniz --</option>
-                                    @foreach (var prov in _provinces)
-                                    {
-                                        <option value="@prov.Name">@prov.Name</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div class="field-group">
-                                <label>Teslimat İlçesi:</label>
-                                <select class="text-input" @bind="_newDistrict" disabled="@(string.IsNullOrEmpty(_newCity))">
-                                    <option value="">-- İlçe Seçiniz --</option>
-                                    @foreach (var dist in GetDistrictsForCity(_newCity))
-                                    {
-                                        <option value="@dist">@dist</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="field-group">
-                            <label>Mahalle, Cadde, Sokak ve Bina/Kapı No:</label>
-                            <input type="text" class="text-input" @bind="_newStreetDetail" />
-                        </div>
-
-                        <div class="field-group">
-                            <label>Tahmini Teslim Tarihi (Geçmiş Tarih Seçilemez):</label>
-                            <input type="date" class="text-input" @bind="_newDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-                        </div>
-
-                        <button type="button" class="btn-action btn-green" @onclick="CreateCargoAsync">
-                            KARGOYU SİSTEME KAYDET
-                        </button>
-                    </div>
-                </div>
-            }
-
-            <!-- 3. SAYFA: SORGULA VE DÜZENLE -->
-            @if (_activePage == "QUERY")
-            {
-                <div class="page-section">
-                    <h2 class="page-title">Kargo Sorgulama ve Kayıt Düzenleme</h2>
-
-                    <div class="panel-card" style="max-width: 740px; margin-bottom: 20px;">
-                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin (Sadece Rakam, Enter ile Sorgular):</label>
-                        <div class="query-bar">
-                            <span class="tr-prefix">TR -</span>
-                            <input type="text"
-                                   class="code-box"
-                                   maxlength="4"
-                                   value="@_trackingDigits"
-                                   @oninput="OnTrackingCodeInput"
-                                   @onkeydown="OnTrackingCodeKeyDown" />
-                            <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="SearchCargoByCodeAsync">
-                                KAYDI SORGULA
-                            </button>
-                        </div>
-                        @if (!string.IsNullOrEmpty(_queryFeedback))
-                        {
-                            <div class="alert-box @(_querySuccess ? "alert-ok" : "alert-err")" style="margin-top:14px;">@_queryFeedback</div>
-                        }
-                    </div>
-
-                    @if (_showDetailEditCard)
-                    {
-                        <div class="panel-card" style="max-width: 740px;">
-                            <div class="edit-header-strip">
-                                Takip Numarası: @_editTrackingNo &nbsp;&nbsp;|&nbsp;&nbsp; Kayıt Statüsü: @(_editIsActive ? "AKTİF KAYIT" : "PASİF (ARŞİVLENMİŞ) KAYIT")
-                            </div>
-
-                            <div class="grid-2col">
-                                <div class="field-group">
-                                    <label>Gönderici Adı Soyadı:</label>
-                                    <input type="text" class="text-input" @bind="_editSender" />
+                        <div class="kp-card-body">
+                            <div class="kp-grid-2">
+                                <div class="kp-field">
+                                    <label>Gönderici Adı Soyadı / Kurum</label>
+                                    <input type="text" class="kp-input" @bind="_newSender" />
                                 </div>
-                                <div class="field-group">
-                                    <label>Alıcı Adı Soyadı:</label>
-                                    <input type="text" class="text-input" @bind="_editReceiver" />
+
+                                <div class="kp-field">
+                                    <label>Alıcı Adı Soyadı</label>
+                                    <input type="text" class="kp-input" @bind="_newReceiver" />
                                 </div>
                             </div>
 
-                            <div class="grid-2col">
-                                <div class="field-group">
-                                    <label>Teslimat İli:</label>
-                                    <select class="text-input" value="@_editCity" @onchange="OnEditCityChanged">
+                            <div class="kp-grid-2">
+                                <div class="kp-field">
+                                    <label>Teslimat İli</label>
+                                    <select class="kp-input" value="@_newCity" @onchange="OnNewCityChanged">
                                         <option value="">-- İl Seçiniz --</option>
                                         @foreach (var prov in _provinces)
                                         {
@@ -216,11 +300,12 @@
                                         }
                                     </select>
                                 </div>
-                                <div class="field-group">
-                                    <label>Teslimat İlçesi:</label>
-                                    <select class="text-input" @bind="_editDistrict" disabled="@(string.IsNullOrEmpty(_editCity))">
+
+                                <div class="kp-field">
+                                    <label>Teslimat İlçesi</label>
+                                    <select class="kp-input" @bind="_newDistrict" disabled="@(string.IsNullOrEmpty(_newCity))">
                                         <option value="">-- İlçe Seçiniz --</option>
-                                        @foreach (var dist in GetDistrictsForCity(_editCity))
+                                        @foreach (var dist in GetDistrictsForCity(_newCity))
                                         {
                                             <option value="@dist">@dist</option>
                                         }
@@ -228,30 +313,129 @@
                                 </div>
                             </div>
 
-                            <div class="field-group">
-                                <label>Mahalle, Cadde, Sokak ve Kapı No:</label>
-                                <input type="text" class="text-input" @bind="_editStreetDetail" />
+                            <div class="kp-field">
+                                <label>Mahalle, Cadde, Sokak ve Kapı Numarası</label>
+                                <input type="text" class="kp-input" @bind="_newStreetDetail" />
                             </div>
 
-                            <div class="grid-2col">
-                                <div class="field-group">
-                                    <label>Tahmini Teslim Tarihi:</label>
-                                    <input type="date" class="text-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-                                </div>
-                                <div class="field-group">
-                                    <label>Operasyon Durumu:</label>
-                                    <select class="text-input" @bind="_editStatus">
-                                        <option value="Hazırlanıyor">Hazırlanıyor</option>
-                                        <option value="Yola Çıktı">Yola Çıktı</option>
-                                        <option value="Teslim Edildi">Teslim Edildi</option>
-                                        <option value="İptal Edildi">İptal Edildi</option>
-                                    </select>
-                                </div>
+                            <div class="kp-field">
+                                <label>Tahmini Teslim Tarihi</label>
+                                <input type="date" class="kp-input" @bind="_newDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
                             </div>
 
-                            <button type="button" class="btn-action btn-orange" @onclick="SaveEditedCargoAsync">
-                                DEĞİŞİKLİKLERİ VE DURUMU KAYDET
+                            <button type="button" class="kp-btn kp-btn-success kp-btn-block" @onclick="CreateCargoAsync">
+                                SEVKİYATI SİSTEME KAYDET VE BARKOD ÜRET
                             </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- 3. SAYFA: SORGULA VE DÜZENLE -->
+            @if (_activePage == "QUERY")
+            {
+                <div class="kp-form-container" style="max-width: 780px;">
+                    <div class="kp-card" style="margin-bottom: 20px;">
+                        <div class="kp-card-header">
+                            <div>
+                                <h3>Kargo Sorgulama ve Operasyon Güncelleme</h3>
+                                <p>4 haneli takip numarasını girerek kaydı çağırabilir ve durumunu değiştirebilirsiniz.</p>
+                            </div>
+                        </div>
+                        <div class="kp-card-body">
+                            <div class="kp-search-strip">
+                                <span class="kp-prefix">TR -</span>
+                                <input type="text"
+                                       class="kp-code-input"
+                                       maxlength="4"
+                                       value="@_trackingDigits"
+                                       @oninput="OnTrackingCodeInput"
+                                       @onkeydown="OnTrackingCodeKeyDown" />
+                                <button type="button" class="kp-btn kp-btn-primary" @onclick="SearchCargoByCodeAsync">
+                                    KAYDI SORGULA
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(_queryFeedback))
+                            {
+                                <div class="kp-alert @(_querySuccess ? "kp-alert-ok" : "kp-alert-err")">
+                                    @_queryFeedback
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (_showDetailEditCard)
+                    {
+                        <div class="kp-card">
+                            <div class="kp-card-header">
+                                <div>
+                                    <h3>Kayıt Detayları: @_editTrackingNo</h3>
+                                    <p>Statü: @(_editIsActive ? "AKTİF OPERASYON KAYDI" : "PASİF (ARŞİVLENMİŞ) KAYIT")</p>
+                                </div>
+                                <span class="kp-badge @GetBadgeClass(_editStatus)">● @_editStatus</span>
+                            </div>
+
+                            <div class="kp-card-body">
+                                <div class="kp-grid-2">
+                                    <div class="kp-field">
+                                        <label>Gönderici Adı Soyadı</label>
+                                        <input type="text" class="kp-input" @bind="_editSender" />
+                                    </div>
+                                    <div class="kp-field">
+                                        <label>Alıcı Adı Soyadı</label>
+                                        <input type="text" class="kp-input" @bind="_editReceiver" />
+                                    </div>
+                                </div>
+
+                                <div class="kp-grid-2">
+                                    <div class="kp-field">
+                                        <label>Teslimat İli</label>
+                                        <select class="kp-input" value="@_editCity" @onchange="OnEditCityChanged">
+                                            <option value="">-- İl Seçiniz --</option>
+                                            @foreach (var prov in _provinces)
+                                            {
+                                                <option value="@prov.Name">@prov.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="kp-field">
+                                        <label>Teslimat İlçesi</label>
+                                        <select class="kp-input" @bind="_editDistrict" disabled="@(string.IsNullOrEmpty(_editCity))">
+                                            <option value="">-- İlçe Seçiniz --</option>
+                                            @foreach (var dist in GetDistrictsForCity(_editCity))
+                                            {
+                                                <option value="@dist">@dist</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="kp-field">
+                                    <label>Mahalle, Cadde, Sokak ve Kapı Numarası</label>
+                                    <input type="text" class="kp-input" @bind="_editStreetDetail" />
+                                </div>
+
+                                <div class="kp-grid-2">
+                                    <div class="kp-field">
+                                        <label>Tahmini Teslim Tarihi</label>
+                                        <input type="date" class="kp-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                    </div>
+                                    <div class="kp-field">
+                                        <label>Operasyon Durumu</label>
+                                        <select class="kp-input" @bind="_editStatus">
+                                            <option value="Hazırlanıyor">Hazırlanıyor</option>
+                                            <option value="Yola Çıktı">Yola Çıktı</option>
+                                            <option value="Teslim Edildi">Teslim Edildi</option>
+                                            <option value="İptal Edildi">İptal Edildi</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="kp-btn kp-btn-warning kp-btn-block" @onclick="SaveEditedCargoAsync">
+                                    DEĞİŞİKLİKLERİ VE OPERASYON DURUMUNU KAYDET
+                                </button>
+                            </div>
                         </div>
                     }
                 </div>
@@ -260,68 +444,59 @@
             <!-- 4. SAYFA: KARGO LİSTELERİ -->
             @if (_activePage == "LIST")
             {
-                <div class="page-section">
-                    <h2 class="page-title">@_listHeaderTitle</h2>
-
-                    <div class="filter-toolbar no-print">
-                        <div class="tab-group">
-                            <button type="button" class="filter-tab @(_currentFilter == "ALL" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("ALL")'>
-                                TÜM KARGOLAR
+                <div class="kp-list-page">
+                    <div class="kp-toolbar no-print">
+                        <div class="kp-tabs">
+                            <button type="button" class="kp-tab @(_currentFilter == "ALL" ? "active" : "")" @onclick='() => LoadCargoListAsync("ALL")'>
+                                TÜM KARGOLAR (@_totalCount)
                             </button>
-                            <button type="button" class="filter-tab @(_currentFilter == "ACTIVE" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("ACTIVE")'>
-                                AKTİF KARGOLAR
+                            <button type="button" class="kp-tab @(_currentFilter == "ACTIVE" ? "active" : "")" @onclick='() => LoadCargoListAsync("ACTIVE")'>
+                                AKTİF OPERASYON (@_activeCount)
                             </button>
-                            <button type="button" class="filter-tab @(_currentFilter == "PASSIVE" ? "active-tab" : "")" @onclick='() => LoadCargoListAsync("PASSIVE")'>
-                                PASİF (ARŞİV)
+                            <button type="button" class="kp-tab @(_currentFilter == "PASSIVE" ? "active" : "")" @onclick='() => LoadCargoListAsync("PASSIVE")'>
+                                ARŞİV (@_passiveCount)
                             </button>
                         </div>
 
-                        <div class="export-actions">
-                            <button type="button" class="btn-export btn-excel" @onclick="ExportFilteredListToExcelAsync" title="Excel formatında indir">
-                                📊 Excel
-                            </button>
-                            <button type="button" class="btn-export btn-pdf" @onclick="ExportToPdfAsync" title="PDF olarak yazdır veya kaydet">
-                                📄 PDF
-                            </button>
-                        </div>
-
-                        <div class="live-search-box">
-                            <label>🔎 Hızlı Ara:</label>
-                            <input type="text" class="text-input" style="width:230px;" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip no, il, ilçe..." />
+                        <div class="kp-toolbar-right">
+                            <input type="text" class="kp-input kp-search-input" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip kodu, alıcı veya şehir ara..." />
+                            <button type="button" class="kp-btn kp-btn-sm kp-btn-success" @onclick="ExportFilteredListToExcelAsync">Excel (CSV)</button>
+                            <button type="button" class="kp-btn kp-btn-sm kp-btn-danger" @onclick="ExportToPdfAsync">PDF Yazdır</button>
                         </div>
                     </div>
 
-                    <div class="list-split-layout">
-                        <!-- SOL: TABLO -->
-                        <div class="table-wrapper">
-                            <table class="enterprise-table">
+                    <div class="kp-list-layout">
+                        <div class="kp-card kp-table-card">
+                            <table class="kp-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 95px;">Takip No</th>
-                                        <th style="width: 140px;">Gönderici</th>
-                                        <th style="width: 140px;">Alıcı</th>
-                                        <th style="width: 125px;">Güncel Durum</th>
-                                        <th>Teslimat Adresi (İl / İlçe - Detay)</th>
-                                        <th style="width: 110px;">Teslim Tarihi</th>
+                                        <th style="width: 110px;">Takip No</th>
+                                        <th style="width: 150px;">Gönderici</th>
+                                        <th style="width: 150px;">Alıcı</th>
+                                        <th style="width: 140px;">Operasyon Durumu</th>
+                                        <th>Teslimat Adresi</th>
+                                        <th style="width: 115px;">Teslim Tarihi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @if (!FilteredCargos.Any())
                                     {
                                         <tr>
-                                            <td colspan="6" style="text-align:center; padding: 30px; color:#64748b;">
-                                                Bu filtreye uygun kargo kaydı bulunamadı.
-                                            </td>
+                                            <td colspan="6" style="text-align:center; padding: 40px;">Arama kriterlerine uygun kargo kaydı bulunamadı.</td>
                                         </tr>
                                     }
                                     @foreach (var item in FilteredCargos)
                                     {
-                                        <tr class="@GetRowColorClass(item.CurrentStatus) @(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "selected-row" : "")"
+                                        <tr class="@(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "kp-row-selected" : "")"
                                             @onclick="() => SelectCargoForPreview(item)">
-                                            <td><strong>@item.TrackingNumber</strong></td>
+                                            <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
                                             <td>@item.SenderName</td>
                                             <td>@item.ReceiverName</td>
-                                            <td><strong>@item.CurrentStatus</strong></td>
+                                            <td>
+                                                <span class="kp-badge @GetBadgeClass(item.CurrentStatus)">
+                                                    ● @item.CurrentStatus
+                                                </span>
+                                            </td>
                                             <td>@item.LastLocation</td>
                                             <td>@item.EstimatedDelivery</td>
                                         </tr>
@@ -330,55 +505,45 @@
                             </table>
                         </div>
 
-                        <!-- SAĞ: ÖZET VE İŞLEM PANELİ -->
-                        <div class="quick-preview-panel no-print">
-                            <div class="qp-header">SEÇİLİ KARGO ÖZETİ</div>
+                        <!-- SAĞ DETAY DENETÇİSİ -->
+                        <div class="kp-card kp-inspector no-print">
+                            <div class="kp-inspector-head">SEVKİYAT DENETİM KARTI</div>
                             @if (_selectedCargo != null)
                             {
-                                <div class="qp-body">
-                                    <div class="qp-trackno">@_selectedCargo.TrackingNumber</div>
+                                <div class="kp-inspector-body">
+                                    <div class="kp-ins-code">@_selectedCargo.TrackingNumber</div>
+                                    <span class="kp-badge @GetBadgeClass(_selectedCargo.CurrentStatus)" style="align-self:flex-start; margin-bottom:12px;">
+                                        ● @_selectedCargo.CurrentStatus
+                                    </span>
 
-                                    <button type="button" class="btn-copy @(_copiedJustNow ? "copied" : "")" @onclick="CopySelectedTrackNoAsync">
-                                        @(_copiedJustNow ? "✓ PANOYA KOPYALANDI!" : "TAKİP NO KOPYALA")
+                                    <button type="button" class="kp-btn kp-btn-outline kp-btn-sm kp-btn-block" @onclick="CopySelectedTrackNoAsync">
+                                        @(_copiedJustNow ? "✓ PANOYA KOPYALANDI" : "BARKOD KODUNU KOPYALA")
                                     </button>
 
-                                    <div class="qp-divider"></div>
+                                    <div class="kp-divider"></div>
 
-                                    <div class="qp-item">
-                                        <span>GÖNDERİCİ BİLGİSİ:</span>
-                                        <strong>@_selectedCargo.SenderName</strong>
-                                    </div>
-                                    <div class="qp-item">
-                                        <span>ALICI BİLGİSİ:</span>
-                                        <strong>@_selectedCargo.ReceiverName</strong>
-                                    </div>
-                                    <div class="qp-item">
-                                        <span>OPERASYON DURUMU:</span>
-                                        <strong>@_selectedCargo.CurrentStatus</strong>
-                                    </div>
-                                    <div class="qp-item">
-                                        <span>TESLİMAT ADRESİ:</span>
-                                        <strong>@_selectedCargo.LastLocation</strong>
-                                    </div>
-                                    <div class="qp-item">
-                                        <span>TAHMİNİ TESLİM TARİHİ:</span>
-                                        <strong>@_selectedCargo.EstimatedDelivery</strong>
-                                    </div>
-                                    <div class="qp-item">
-                                        <span>KAYIT STATÜSÜ:</span>
-                                        <strong>@(_selectedCargo.IsActive ? "Aktif (Operasyonda)" : "Pasif (Arşivde)")</strong>
-                                    </div>
+                                    <div class="kp-ins-row"><span>GÖNDERİCİ</span><strong>@_selectedCargo.SenderName</strong></div>
+                                    <div class="kp-ins-row"><span>ALICI</span><strong>@_selectedCargo.ReceiverName</strong></div>
+                                    <div class="kp-ins-row"><span>TESLİMAT ADRESİ</span><strong>@_selectedCargo.LastLocation</strong></div>
+                                    <div class="kp-ins-row"><span>TAHMİNİ TESLİM</span><strong>@_selectedCargo.EstimatedDelivery</strong></div>
+                                    <div class="kp-ins-row"><span>KAYIT SINIFI</span><strong>@(_selectedCargo.IsActive ? "Aktif Operasyon" : "Pasif Arşiv")</strong></div>
 
-                                    <button type="button" class="btn-action btn-orange" style="margin-top:auto;" @onclick="OpenSelectedCargoInEditAsync">
-                                        BU KARGOYU DÜZENLE &gt;
-                                    </button>
+                                    <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                                        @if (_selectedCargo.CurrentStatus == "Yola Çıktı")
+                                        {
+                                            <button type="button" class="kp-btn kp-btn-primary kp-btn-block" @onclick="() => JumpToLiveMapAsync(_selectedCargo.TrackingNumber)">
+                                                CANLI HARİTADA İZLE →
+                                            </button>
+                                        }
+                                        <button type="button" class="kp-btn kp-btn-warning kp-btn-block" @onclick="OpenSelectedCargoInEditAsync">
+                                            KAYDI DÜZENLE →
+                                        </button>
+                                    </div>
                                 </div>
                             }
                             else
                             {
-                                <div class="qp-empty">
-                                    Detayları görmek, takip numarasını kopyalamak veya düzenlemek için soldaki listeden bir kargoya tıklayın.
-                                </div>
+                                <div class="kp-empty-state">Detayları incelemek için tablodan bir sevkiyat seçiniz.</div>
                             }
                         </div>
                     </div>
@@ -388,50 +553,68 @@
             <!-- 5. SAYFA: CANLI HARİTA VE KURYE TAKİBİ -->
             @if (_activePage == "LIVE_MAP")
             {
-                <div class="page-section">
-                    <h2 class="page-title">Canlı Kurye ve Rota Takip Merkezi</h2>
-                    <p class="page-subtitle">Yola çıkan tüm kargolar arka planda eşzamanlı ilerler. İstediğiniz kargo kodunu yazıp anlık konumuna bağlanabilirsiniz.</p>
-
-                    <div class="panel-card" style="max-width: 800px; margin-bottom: 20px;">
-                        <label class="small-label">4 Haneli Kargo Takip Kodunu Girin:</label>
-                        <div class="query-bar">
-                            <span class="tr-prefix">TR -</span>
-                            <input type="text"
-                                   class="code-box"
-                                   maxlength="4"
-                                   value="@_liveMapDigits"
-                                   @oninput="OnLiveMapInput"
-                                   @onkeydown="OnLiveMapKeyDown" />
-                            <button type="button" class="btn-action btn-blue" style="width:auto; padding: 0 28px;" @onclick="StartLiveTrackingAsync">
-                                CANLI KONUMA BAĞLAN
-                            </button>
-                            @if (_isStreamRunning)
-                            {
-                                <button type="button" class="btn-action" style="width:auto; padding: 0 16px; background:#dc2626;" @onclick="() => StopLiveTracking(clearMessage: false)">
-                                    DURDUR
+                <div class="kp-map-page">
+                    <div class="kp-card" style="margin-bottom: 18px;">
+                        <div class="kp-card-header">
+                            <div>
+                                <h3>Gerçek Zamanlı GPS Telemetri ve Rota Takibi</h3>
+                                <p>Yola çıkan tüm kargolar arka planda eşzamanlı ilerler. Kod girerek veya aşağıdaki aktif butonlara tıklayarak bağlanın.</p>
+                            </div>
+                        </div>
+                        <div class="kp-card-body">
+                            <div class="kp-search-strip">
+                                <span class="kp-prefix">TR -</span>
+                                <input type="text"
+                                       class="kp-code-input"
+                                       maxlength="4"
+                                       value="@_liveMapDigits"
+                                       @oninput="OnLiveMapInput"
+                                       @onkeydown="OnLiveMapKeyDown" />
+                                <button type="button" class="kp-btn kp-btn-primary" @onclick="StartLiveTrackingAsync">
+                                    CANLI KONUMA BAĞLAN
                                 </button>
+                                @if (_isStreamRunning)
+                                {
+                                    <button type="button" class="kp-btn kp-btn-danger" @onclick="() => StopLiveTracking(clearMessage: false)">
+                                        AKIŞI DURDUR
+                                    </button>
+                                }
+                            </div>
+
+                            <!-- YOLA ÇIKMIŞ KARGOLAR İÇİN HIZLI SEÇİM ÇUBUĞU -->
+                            @if (_cachedCargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
+                            {
+                                <div class="kp-quick-chips">
+                                    <span>Sahadaki Aktif Kuryeler (Hızlı Geçiş):</span>
+                                    @foreach (var c in _cachedCargos.Where(x => x.CurrentStatus == "Yola Çıktı"))
+                                    {
+                                        <button type="button" class="kp-chip" @onclick="() => JumpToLiveMapAsync(c.TrackingNumber)">
+                                            🚚 @c.TrackingNumber (@c.LastLocation.Split('-')[0])
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_liveMapFeedback))
+                            {
+                                <div class="kp-alert @(_liveMapSuccess ? "kp-alert-ok" : "kp-alert-err")" style="margin-top:14px;">
+                                    @_liveMapFeedback
+                                </div>
                             }
                         </div>
-
-                        @if (!string.IsNullOrEmpty(_liveMapFeedback))
-                        {
-                            <div class="alert-box @(_liveMapSuccess ? "alert-ok" : "alert-err")" style="margin-top:14px;">
-                                @_liveMapFeedback
-                            </div>
-                        }
                     </div>
 
                     @if (_isMapVisible)
                     {
-                        <div class="live-status-card" style="max-width: 800px; margin-bottom: 12px;">
-                            <div class="status-indicator">
-                                <span class="blink-dot"></span>
+                        <div class="kp-telemetry-bar">
+                            <div class="kp-tel-left">
+                                <span class="kp-pulse-dot"></span>
                                 <strong>@_courierName</strong>
                             </div>
-                            <div class="status-text">@_liveStepMessage</div>
+                            <div class="kp-tel-right">@_liveStepMessage</div>
                         </div>
 
-                        <div id="cargoMapBox" style="width: 100%; max-width: 800px; height: 420px; border: 2px solid #1e293b; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"></div>
+                        <div id="cargoMapBox" class="kp-map-canvas"></div>
                     }
                 </div>
             }
@@ -441,661 +624,1186 @@
 </div>
 
 <style>
+    /* ==========================================================================
+           KARGO PRO ENTERPRISE TASARIM SİSTEMİ (!important ZIRHLI LIGHT & DARK TEMA)
+           ========================================================================== */
+    .kp-light {
+        --bg-body: #f1f5f9;
+        --bg-surface: #ffffff;
+        --bg-subtle: #f8fafc;
+        --bg-sidebar: #0f172a;
+        --bg-topbar: #ffffff;
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --text-muted: #64748b;
+        --border-col: #e2e8f0;
+        --input-bg: #ffffff;
+        --row-hover: #f8fafc;
+        --row-sel: #eff6ff;
+        --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .kp-dark {
+        --bg-body: #090d16;
+        --bg-surface: #111827;
+        --bg-subtle: #1e293b;
+        --bg-sidebar: #030712;
+        --bg-topbar: #111827;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-col: #1f2937;
+        --input-bg: #0f172a;
+        --row-hover: #1e293b;
+        --row-sel: #172554;
+        --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
     * {
         box-sizing: border-box;
     }
 
     body, html {
-        margin: 0;
-        padding: 0;
-        font-family: 'Segoe UI', sans-serif;
-        background: #f1f5f9;
-        color: #0f172a;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
     }
 
-    .app-wrapper {
+    .kp-app {
         display: flex;
         height: 100vh;
         width: 100vw;
         overflow: hidden;
+        background-color: var(--bg-body) !important;
+        color: var(--text-primary) !important;
+        transition: background-color 0.25s ease, color 0.25s ease;
     }
 
-    .sidebar {
-        width: 255px;
-        background: #0f172a;
-        color: #94a3b8;
+    /* SAĞ ÜST TOAST BİLDİRİMLERİ */
+    .kp-toast-stack {
+        position: fixed;
+        top: 20px;
+        right: 24px;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .kp-toast {
+        display: flex;
+        align-items: stretch;
+        min-width: 320px;
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border-col);
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+        overflow: hidden;
+        animation: kpSlideIn 0.25s ease-out forwards;
+    }
+
+    .kp-toast-indicator {
+        width: 6px;
+        flex-shrink: 0;
+    }
+
+    .kp-toast-ok .kp-toast-indicator {
+        background: #10b981;
+    }
+
+    .kp-toast-err .kp-toast-indicator {
+        background: #ef4444;
+    }
+
+    .kp-toast-content {
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+        .kp-toast-content strong {
+            font-size: 11px;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+        }
+
+        .kp-toast-content span {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+    @@keyframes kpSlideIn {
+        from {
+            transform: translateX(110%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    /* SOL YAN MENÜ (SIDEBAR) */
+    .kp-sidebar {
+        width: 265px;
+        background: var(--bg-sidebar) !important;
+        border-right: 1px solid #1e293b;
         display: flex;
         flex-direction: column;
         flex-shrink: 0;
         user-select: none;
     }
 
-    .brand-header {
-        background: #090e1a;
-        padding: 20px 22px;
+    .kp-brand {
+        padding: 22px 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
         border-bottom: 1px solid #1e293b;
     }
 
-        .brand-header h1 {
-            margin: 0;
-            font-size: 22px;
-            color: #38bdf8;
-            letter-spacing: 0.5px;
-        }
+    .kp-logo-box {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #2563eb, #06b6d4);
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    }
 
-        .brand-header p {
-            margin: 6px 0 0 0;
-            font-size: 11.5px;
-            color: #94a3b8;
-            font-style: italic;
-            line-height: 1.4;
-        }
+    .kp-brand h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 0.5px;
+    }
 
-    .nav-list {
+    .kp-brand span {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #38bdf8;
+        letter-spacing: 0.8px;
+    }
+
+    .kp-nav-group-title {
+        padding: 20px 22px 8px 22px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 1px;
+    }
+
+    .kp-nav {
         display: flex;
         flex-direction: column;
-        margin-top: 10px;
+        gap: 4px;
+        padding: 0 12px;
     }
 
-    .nav-btn {
-        background: transparent;
+    .kp-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 12px 14px;
         border: none;
-        border-left: 5px solid transparent;
+        border-radius: 6px;
+        background: transparent;
         color: #94a3b8;
-        padding: 17px 22px;
-        text-align: left;
         font-size: 13px;
-        font-weight: 700;
+        font-weight: 600;
+        text-align: left;
         cursor: pointer;
-        transition: 0.15s;
+        transition: all 0.15s ease;
     }
 
-        .nav-btn:hover {
-            background: #1e293b;
-            color: #e2e8f0;
+        .kp-nav-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: #f8fafc;
         }
 
-        .nav-btn.active {
-            background: #1e293b;
+        .kp-nav-item.active {
+            background: linear-gradient(90deg, rgba(37,99,235,0.22), rgba(37,99,235,0.05));
             color: #ffffff;
-            border-left-color: #38bdf8;
+            border-left: 3px solid #38bdf8;
         }
 
-    .sidebar-footer {
+    .kp-nav-pill {
+        margin-left: auto;
+        background: #06b6d4;
+        color: #0f172a;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 12px;
+    }
+
+    .kp-sidebar-bottom {
         margin-top: auto;
         padding: 16px;
-        text-align: center;
-        font-size: 11px;
-        color: #64748b;
         border-top: 1px solid #1e293b;
     }
 
-    .main-area {
+    .kp-sys-box {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+
+    .kp-sys-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        margin-bottom: 4px;
+        color: #94a3b8;
+    }
+
+        .kp-sys-row strong {
+            color: #e2e8f0;
+        }
+
+    .kp-copyright {
+        text-align: center;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    /* ÜST BAR (TOPBAR) */
+    .kp-main {
         flex: 1;
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
 
-    .top-header {
-        height: 60px;
-        background: #ffffff;
-        border-bottom: 1px solid #cbd5e1;
+    .kp-topbar {
+        height: 64px;
+        background: var(--bg-topbar) !important;
+        border-bottom: 1px solid var(--border-col);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 26px;
+        padding: 0 28px;
         flex-shrink: 0;
     }
 
-    .header-left {
+    .kp-topbar-left {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
     }
 
-    .btn-back {
-        background: #e2e8f0;
-        color: #1e293b;
-        border: none;
-        padding: 7px 14px;
-        font-weight: 700;
+    .kp-btn-back {
+        background: var(--bg-subtle);
+        color: var(--text-primary);
+        border: 1px solid var(--border-col);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 600;
         font-size: 12.5px;
-        border-radius: 4px;
         cursor: pointer;
     }
 
-        .btn-back:disabled {
-            opacity: 0.45;
+        .kp-btn-back:disabled {
+            opacity: 0.4;
             cursor: default;
         }
 
-    .breadcrumb-text {
-        font-weight: 700;
-        font-size: 14px;
-        color: #334155;
+    .kp-breadcrumb {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
     }
 
-    .header-right {
+    .kp-topbar-right {
         display: flex;
         align-items: center;
-        gap: 24px;
-        font-size: 13px;
-        font-weight: 700;
+        gap: 12px;
     }
 
-    .server-badge.online {
-        color: #16a34a;
-    }
-
-    .server-badge.offline {
-        color: #dc2626;
-    }
-
-    .live-clock {
-        color: #475569;
-    }
-
-    .page-content {
-        flex: 1;
-        padding: 26px 30px;
-        overflow-y: auto;
-    }
-
-    .page-title {
-        margin: 0 0 6px 0;
-        font-size: 24px;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
-    .page-subtitle {
-        margin: 0 0 22px 0;
-        font-size: 14px;
-        color: #64748b;
-    }
-
-    .summary-cards {
-        display: grid;
-        grid-template-columns: repeat(3, 295px);
-        gap: 22px;
-        margin-bottom: 28px;
-    }
-
-    .summary-card {
-        padding: 22px;
-        color: #ffffff;
-        cursor: pointer;
-        transition: transform 0.15s;
-        user-select: none;
-    }
-
-        .summary-card:hover {
-            transform: translateY(-3px);
-        }
-
-    .card-blue {
-        background: #1e40af;
-    }
-
-    .card-green {
-        background: #15803d;
-    }
-
-    .card-slate {
-        background: #475569;
-    }
-
-    .sc-title {
+    .kp-status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 20px;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
+        border: 1px solid var(--border-col);
+        background: var(--bg-subtle);
     }
 
-    .sc-count {
-        font-size: 44px;
-        font-weight: 800;
-        margin: 12px 0 18px 0;
-    }
-
-    .sc-link {
-        font-size: 11.5px;
-        color: #e2e8f0;
-    }
-
-    .slogan-box {
-        max-width: 930px;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-left: 5px solid #1e40af;
-        padding: 22px 26px;
-    }
-
-        .slogan-box h3 {
-            margin: 0 0 8px 0;
-            font-size: 16.5px;
-            font-style: italic;
-            color: #0f172a;
+        .kp-status-pill.online {
+            color: #10b981;
         }
 
-        .slogan-box p {
-            margin: 0;
-            font-size: 13px;
-            color: #64748b;
+        .kp-status-pill.offline {
+            color: #ef4444;
         }
 
-    .panel-card {
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        padding: 26px;
+    .kp-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
     }
 
-    .field-group {
-        margin-bottom: 16px;
-    }
-
-        .field-group label, .small-label {
-            display: block;
-            font-size: 13px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 6px;
-        }
-
-    .text-input {
-        width: 100%;
-        padding: 9px 12px;
-        font-size: 14px;
-        border: 1px solid #94a3b8;
-        outline: none;
-        background: #ffffff;
-    }
-
-        .text-input:focus {
-            border-color: #1e40af;
-        }
-
-        .text-input:disabled {
-            background: #e2e8f0;
-            cursor: not-allowed;
-        }
-
-    .query-bar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-top: 8px;
-    }
-
-    .tr-prefix {
-        font-size: 20px;
-        font-weight: 800;
-        color: #1e40af;
-    }
-
-    .code-box {
-        width: 125px;
-        font-size: 20px;
-        font-weight: 800;
-        padding: 6px 10px;
-        border: 2px solid #1e40af;
-        text-align: center;
-    }
-
-    .edit-header-strip {
-        background: #f8fafc;
-        border: 1px solid #cbd5e1;
-        padding: 10px 14px;
-        font-weight: 700;
-        font-size: 13.5px;
-        color: #0f172a;
-        margin-bottom: 18px;
-    }
-
-    .grid-2col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-    }
-
-    .btn-action {
-        width: 100%;
-        height: 42px;
-        border: none;
-        color: #ffffff;
-        font-weight: 700;
-        font-size: 13.5px;
-        cursor: pointer;
-    }
-
-    .btn-green {
-        background: #15803d;
-    }
-
-    .btn-blue {
-        background: #1e40af;
-    }
-
-    .btn-orange {
-        background: #ea580c;
-    }
-
-    .export-actions {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .btn-export {
-        border: none;
-        padding: 0 10px;
-        height: 28px;
-        font-size: 11px;
-        font-weight: 700;
-        cursor: pointer;
-        color: #ffffff;
-        border-radius: 3px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        transition: background 0.15s ease-in-out;
-    }
-
-    .btn-excel {
-        background: #15803d;
-    }
-
-        .btn-excel:hover {
-            background: #166534;
-        }
-
-    .btn-pdf {
-        background: #b91c1c;
-    }
-
-        .btn-pdf:hover {
-            background: #991b1b;
-        }
-
-    .alert-box {
-        padding: 10px 14px;
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 14px;
-    }
-
-    .alert-ok {
-        background: #dcfce7;
-        color: #14532d;
-        border: 1px solid #86efac;
-    }
-
-    .alert-err {
-        background: #fee2e2;
-        color: #7f1d1d;
-        border: 1px solid #fca5a5;
-    }
-
-    .filter-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        max-width: 1020px;
-        margin-bottom: 14px;
-    }
-
-    .tab-group {
-        display: flex;
-        gap: 8px;
-    }
-
-    .filter-tab {
-        width: 150px;
-        height: 38px;
-        border: none;
-        background: #cbd5e1;
-        color: #334155;
-        font-weight: 700;
+    .kp-clock-pill {
+        padding: 6px 12px;
+        border-radius: 6px;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border-col);
         font-size: 12.5px;
-        cursor: pointer;
-        border-bottom: 4px solid transparent;
+        font-weight: 600;
+        color: var(--text-secondary);
     }
 
-        .filter-tab.active-tab {
-            background: #0f172a;
-            color: #ffffff;
-            border-bottom-color: #38bdf8;
-        }
-
-    .live-search-box {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 700;
-        font-size: 13px;
-    }
-
-    .list-split-layout {
-        display: flex;
-        gap: 16px;
-        max-width: 1020px;
-        height: 500px;
-    }
-
-    .table-wrapper {
-        flex: 1;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        overflow-y: auto;
-    }
-
-    .enterprise-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-        font-size: 13px;
-        user-select: none;
-    }
-
-        .enterprise-table th {
-            background: #1e293b;
-            color: #ffffff;
-            text-align: left;
-            padding: 11px 10px;
-            font-weight: 700;
-            position: sticky;
-            top: 0;
-        }
-
-        .enterprise-table td {
-            padding: 10px;
-            border-bottom: 1px solid #cbd5e1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            cursor: pointer;
-        }
-
-    .row-prep {
-        background: #fef9c3;
-        color: #713f12;
-    }
-
-    .row-transit {
-        background: #e0f2fe;
-        color: #0c4a6e;
-    }
-
-    .row-delivered {
-        background: #dcfce7;
-        color: #14532d;
-    }
-
-    .row-cancelled {
-        background: #fee2e2;
-        color: #7f1d1d;
-    }
-
-    .selected-row td {
-        font-weight: 700;
-        border-top: 2px solid #0f172a;
-        border-bottom: 2px solid #0f172a;
-    }
-
-    .quick-preview-panel {
-        width: 265px;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        display: flex;
-        flex-direction: column;
-        flex-shrink: 0;
-    }
-
-    .qp-header {
-        background: #1e293b;
-        color: #ffffff;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
+    .kp-theme-btn {
+        background: var(--bg-subtle);
+        color: var(--text-primary);
+        border: 1px solid var(--border-col);
+        padding: 7px 14px;
+        border-radius: 6px;
         font-size: 12.5px;
-    }
-
-    .qp-body {
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-    }
-
-    .qp-trackno {
-        font-size: 20px;
-        font-weight: 800;
-        color: #1e40af;
-        margin-bottom: 8px;
-    }
-
-    .btn-copy {
-        width: 100%;
-        height: 34px;
-        border: none;
-        background: #e2e8f0;
-        color: #0f172a;
         font-weight: 700;
-        font-size: 11.5px;
         cursor: pointer;
         transition: 0.15s;
     }
 
-        .btn-copy.copied {
-            background: #16a34a;
-            color: #ffffff;
+        .kp-theme-btn:hover {
+            border-color: #38bdf8;
         }
 
-    .qp-divider {
-        height: 1px;
-        background: #cbd5e1;
-        margin: 14px 0;
+    /* ANA İÇERİK ALANI */
+    .kp-content {
+        flex: 1;
+        padding: 26px 30px;
+        overflow-y: auto;
+        background: var(--bg-body) !important;
     }
 
-    .qp-item {
-        margin-bottom: 12px;
-        font-size: 12.5px;
-    }
-
-        .qp-item span {
-            display: block;
-            color: #64748b;
-            font-size: 11px;
-            font-weight: 700;
-        }
-
-        .qp-item strong {
-            color: #0f172a;
-        }
-
-    .qp-empty {
-        padding: 24px 16px;
-        font-size: 13px;
-        color: #64748b;
-        line-height: 1.5;
-    }
-
-    .live-status-card {
-        background: #0f172a;
+    /* ANA SAYFA: HERO BANNER */
+    .kp-hero-banner {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
         color: #ffffff;
-        padding: 14px 18px;
+        padding: 26px 30px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-card);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .kp-hero-tag {
+        display: inline-block;
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 10px;
         border-radius: 4px;
+        letter-spacing: 0.8px;
+        margin-bottom: 8px;
+    }
+
+    .kp-hero-banner h2 {
+        margin: 0 0 6px 0;
+        font-size: 22px;
+        font-weight: 800;
+        color: #ffffff;
+    }
+
+    .kp-hero-banner p {
+        margin: 0;
+        font-size: 13.5px;
+        color: #cbd5e1;
+    }
+
+    .kp-hero-actions {
+        display: flex;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+
+    /* 4'LÜ KURUMSAL KPI KARTLARI */
+    .kp-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    .kp-kpi-card {
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-col);
+        border-radius: 10px;
+        padding: 20px;
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+        transition: transform 0.15s ease, border-color 0.15s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+        .kp-kpi-card:hover {
+            transform: translateY(-3px);
+            border-color: #38bdf8;
+        }
+
+    .kpi-blue {
+        border-top: 4px solid #3b82f6;
+    }
+
+    .kpi-emerald {
+        border-top: 4px solid #10b981;
+    }
+
+    .kpi-cyan {
+        border-top: 4px solid #06b6d4;
+    }
+
+    .kpi-slate {
+        border-top: 4px solid #64748b;
+    }
+
+    .kp-kpi-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .kp-kpi-top span {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.4px;
+        }
+
+    .kp-kpi-icon {
+        font-size: 18px;
+    }
+
+    .kp-kpi-value {
+        font-size: 36px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin: 10px 0 12px 0;
+    }
+
+    .kp-kpi-bar {
+        height: 5px;
+        width: 100%;
+        background: var(--bg-subtle);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+
+        .kp-kpi-bar div {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+    .kp-kpi-foot {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    /* ANA SAYFA İKİLİ PANEL */
+    .kp-dash-split {
+        display: grid;
+        grid-template-columns: 1.45fr 1fr;
+        gap: 20px;
+    }
+
+    .kp-card {
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-col);
+        border-radius: 10px;
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+    }
+
+    .kp-card-header {
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--border-col);
         display: flex;
         align-items: center;
         justify-content: space-between;
     }
 
-    .status-indicator {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
+        .kp-card-header h3 {
+            margin: 0 0 3px 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kp-card-header p {
+            margin: 0;
+            font-size: 12.5px;
+            color: var(--text-muted);
+        }
+
+    .kp-card-body {
+        padding: 22px;
+    }
+
+    .kp-link-btn {
+        background: transparent;
+        border: none;
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 12.5px;
+        cursor: pointer;
+    }
+
+    /* KURUMSAL TABLO */
+    .kp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+        .kp-table th {
+            background: var(--bg-subtle);
+            color: var(--text-muted);
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-col);
+        }
+
+        .kp-table td {
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--border-col);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .kp-table tbody tr:hover td {
+            background: var(--row-hover);
+        }
+
+    .kp-row-selected td {
+        background: var(--row-sel) !important;
+        font-weight: 600;
+    }
+
+    .kp-mono {
+        font-family: 'Cascadia Code', Consolas, monospace;
         color: #38bdf8;
     }
 
-    .blink-dot {
-        width: 10px;
-        height: 10px;
-        background: #22c55e;
-        border-radius: 50%;
-        box-shadow: 0 0 8px #22c55e;
-        animation: pulse 1.2s infinite;
+    /* HAP ETİKETLER (STATUS BADGES) */
+    .kp-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11.5px;
+        font-weight: 700;
     }
 
-    @@keyframes pulse {
-        0% {
+    .badge-prep {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+    }
+
+    .badge-transit {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+    }
+
+    .badge-delivered {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+    }
+
+    .badge-cancelled {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    /* CANLI FİLO LİSTESİ */
+    .kp-fleet-list {
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .kp-fleet-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border: 1px solid var(--border-col);
+        border-radius: 8px;
+        background: var(--bg-subtle);
+    }
+
+    .kp-fleet-code {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .kp-fleet-route {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #38bdf8;
+        margin-top: 2px;
+    }
+
+    .kp-fleet-rec {
+        font-size: 11.5px;
+        color: var(--text-muted);
+    }
+
+    .kp-pulse-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+        animation: kpPulse 1.2s infinite;
+    }
+
+    @@keyframes kpPulse {
+        0%, 100% {
             opacity: 1;
             transform: scale(1);
         }
 
         50% {
-            opacity: 0.3;
+            opacity: 0.35;
             transform: scale(0.85);
         }
-
-        100% {
-            opacity: 1;
-            transform: scale(1);
-        }
     }
 
-    .status-text {
+    /* FORMLAR VE BUTONLAR */
+    .kp-form-container {
+        max-width: 660px;
+    }
+
+    .kp-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .kp-field {
+        margin-bottom: 16px;
+    }
+
+        .kp-field label {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+    .kp-input {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 13.5px;
+        background: var(--input-bg) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border-col);
+        border-radius: 6px;
+        outline: none;
+    }
+
+        .kp-input:focus {
+            border-color: #38bdf8;
+        }
+
+        .kp-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .kp-btn {
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+
+    .kp-btn-sm {
+        padding: 7px 14px;
+        font-size: 12px;
+    }
+
+    .kp-btn-block {
+        width: 100%;
+        padding: 12px;
+    }
+
+    .kp-btn-primary {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+        .kp-btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+    .kp-btn-success {
+        background: #10b981;
+        color: #ffffff;
+    }
+
+    .kp-btn-warning {
+        background: #f59e0b;
+        color: #0f172a;
+    }
+
+    .kp-btn-danger {
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .kp-btn-outline {
+        background: transparent;
+        border: 1px solid #38bdf8;
+        color: #38bdf8;
+    }
+
+    .kp-search-strip {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .kp-prefix {
+        font-size: 20px;
+        font-weight: 800;
+        color: #38bdf8;
+    }
+
+    .kp-code-input {
+        width: 130px;
+        font-size: 20px;
+        font-weight: 800;
+        text-align: center;
+        padding: 7px 10px;
+        border: 2px solid #38bdf8;
+        border-radius: 6px;
+        background: var(--input-bg);
+        color: var(--text-primary);
+    }
+
+    /* LİSTE SAYFASI DÜZENİ */
+    .kp-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .kp-tabs {
+        display: flex;
+        gap: 8px;
+    }
+
+    .kp-tab {
+        padding: 9px 18px;
+        border: 1px solid var(--border-col);
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        font-weight: 700;
+        font-size: 12.5px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+        .kp-tab.active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+
+    .kp-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .kp-search-input {
+        width: 250px;
+    }
+
+    .kp-list-layout {
+        display: flex;
+        gap: 18px;
+        height: 540px;
+    }
+
+    .kp-table-card {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .kp-inspector {
+        width: 290px;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+    }
+
+    .kp-inspector-head {
+        padding: 14px;
+        background: var(--bg-subtle);
+        border-bottom: 1px solid var(--border-col);
+        font-weight: 800;
+        font-size: 12px;
+        text-align: center;
+        letter-spacing: 0.6px;
+    }
+
+    .kp-inspector-body {
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+
+    .kp-ins-code {
+        font-size: 22px;
+        font-weight: 800;
+        color: #38bdf8;
+        margin-bottom: 6px;
+    }
+
+    .kp-divider {
+        height: 1px;
+        background: var(--border-col);
+        margin: 14px 0;
+    }
+
+    .kp-ins-row {
+        margin-bottom: 12px;
+    }
+
+        .kp-ins-row span {
+            display: block;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .kp-ins-row strong {
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+
+    /* CANLI HARİTA SAYFASI */
+    .kp-quick-chips {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .kp-chip {
+        background: var(--bg-subtle);
+        color: var(--text-primary);
+        border: 1px solid var(--border-col);
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .kp-chip:hover {
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+
+    .kp-telemetry-bar {
+        background: #0f172a;
+        color: #ffffff;
+        padding: 14px 20px;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        border: 1px solid #1e293b;
+    }
+
+    .kp-tel-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #38bdf8;
+        font-size: 14px;
+    }
+
+    .kp-tel-right {
         font-size: 13px;
         color: #e2e8f0;
-        font-style: italic;
     }
 
-    @@media print {
-        .no-print {
+    .kp-map-canvas {
+        width: 100%;
+        height: 450px;
+        border-radius: 10px;
+        border: 1px solid var(--border-col);
+        box-shadow: var(--shadow-card);
+    }
+
+    .kp-alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-top: 12px;
+    }
+
+    .kp-alert-ok {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .kp-alert-err {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .kp-empty-state {
+        padding: 28px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+           MOBİL VE PWA UYUMLU KESİN RESPONSIVE AYARLARI (WEB GÖRÜNÜMÜNE DOKUNMAZ)
+           ========================================================================== */
+    @@media (max-width: 1024px) {
+        .kp-app {
+            flex-direction: column !important;
+            height: auto !important;
+            min-height: 100vh !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
+
+        .kp-sidebar {
+            width: 100% !important;
+            height: auto !important;
+            flex-shrink: unset !important;
+            border-right: none !important;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .kp-brand {
+            padding: 14px 16px !important;
+        }
+
+        .kp-nav-group-title,
+        .kp-sidebar-bottom {
             display: none !important;
         }
 
-        .app-wrapper {
-            display: block;
-            height: auto;
-            overflow: visible;
+        .kp-nav {
+            flex-direction: row !important;
+            overflow-x: auto !important;
+            padding: 10px 12px !important;
+            gap: 8px !important;
+            -webkit-overflow-scrolling: touch;
         }
 
-        .main-area, .page-content, .list-split-layout, .table-wrapper {
+        .kp-nav-item {
+            width: auto !important;
+            white-space: nowrap !important;
+            padding: 9px 14px !important;
+            font-size: 12px !important;
+            flex-shrink: 0 !important;
+        }
+
+            .kp-nav-item.active {
+                border-left: none !important;
+                border-bottom: 3px solid #38bdf8 !important;
+            }
+
+        .kp-main {
             overflow: visible !important;
+        }
+
+        .kp-content {
+            overflow: visible !important;
+            padding: 18px !important;
+        }
+
+        .kp-kpi-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 12px !important;
+        }
+
+        .kp-dash-split {
+            grid-template-columns: 1fr !important;
+        }
+
+        .kp-list-layout {
+            flex-direction: column !important;
             height: auto !important;
         }
 
-        .enterprise-table {
-            border: 1px solid #000;
+        .kp-table-card {
+            max-height: 420px;
         }
 
-            .enterprise-table th, .enterprise-table td {
-                border: 1px solid #ccc;
-                color: #000 !important;
+        .kp-inspector {
+            width: 100% !important;
+        }
+
+        .kp-hero-banner {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 14px !important;
+            padding: 20px !important;
+        }
+
+        .kp-hero-actions {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+            .kp-hero-actions .kp-btn {
+                width: 100%;
+                text-align: center;
             }
+    }
+
+    @@media (max-width: 640px) {
+        .kp-kpi-grid {
+            grid-template-columns: 1fr !important;
+        }
+
+        .kp-grid-2 {
+            grid-template-columns: 1fr !important;
+            gap: 0 !important;
+        }
+
+        .kp-topbar {
+            padding: 10px 14px !important;
+            height: auto !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+        }
+
+        .kp-topbar-left,
+        .kp-topbar-right {
+            width: 100% !important;
+            justify-content: space-between !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+        }
+
+        .kp-breadcrumb {
+            font-size: 12px !important;
+        }
+
+        .kp-content {
+            padding: 12px !important;
+        }
+
+        .kp-search-strip {
+            flex-wrap: wrap !important;
+        }
+
+            .kp-search-strip .kp-btn {
+                width: 100% !important;
+            }
+
+        .kp-toolbar-right {
+            width: 100% !important;
+            flex-wrap: wrap !important;
+        }
+
+        .kp-search-input {
+            width: 100% !important;
+        }
+
+        .kp-tabs {
+            width: 100% !important;
+            overflow-x: auto !important;
+        }
+
+        .kp-tab {
+            white-space: nowrap !important;
+            flex: 1;
+            text-align: center;
+            padding: 8px 10px !important;
+            font-size: 11.5px !important;
+        }
+
+        .kp-telemetry-bar {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 6px !important;
+        }
+
+        .kp-table-card,
+        .kp-table-box {
+            width: 100% !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .kp-table {
+            min-width: 580px !important;
+        }
+
+        .kp-toast-stack {
+            left: 12px !important;
+            right: 12px !important;
+            top: 12px !important;
+        }
+
+        .kp-toast {
+            min-width: unset !important;
+            width: 100% !important;
+        }
     }
 </style>
 
@@ -1111,8 +1819,37 @@
 
     private static List<ProvinceModel> _provinces = new();
 
+    // VARSAYILAN TEMA: Kurumsal Gece/Gündüz Modu (Anında Harita Değişimi İle)
+    private bool _isDarkMode = true;
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDarkMode = !_isDarkMode;
+        if (_isMapVisible)
+        {
+            try { await JSRuntime.InvokeVoidAsync("setMapTheme", _isDarkMode); } catch { }
+        }
+    }
+
+    private class ToastMessage
+    {
+        public string Message { get; set; } = "";
+        public bool IsSuccess { get; set; }
+    }
+    private readonly List<ToastMessage> _toasts = new();
+
+    private async Task ShowToast(string message, bool success)
+    {
+        var toast = new ToastMessage { Message = message, IsSuccess = success };
+        _toasts.Add(toast);
+        StateHasChanged();
+        await Task.Delay(3500);
+        _toasts.Remove(toast);
+        StateHasChanged();
+    }
+
     private string _activePage = "HOME";
-    private string _breadcrumb = "Operasyon Merkezi  >  Ana Sayfa";
+    private string _breadcrumb = "Operasyon Merkezi  /  Ana Sayfa";
     private readonly Stack<(string Page, string Breadcrumb, string Filter)> _navHistory = new();
 
     private string _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
@@ -1123,6 +1860,7 @@
     private int _totalCount;
     private int _activeCount;
     private int _passiveCount;
+    private int _inTransitCount;
 
     private string _newSender = "";
     private string _newReceiver = "";
@@ -1130,8 +1868,6 @@
     private string _newDistrict = "";
     private string _newStreetDetail = "";
     private DateTime _newDeliveryDate = DateTime.Today;
-    private string _addFeedback = "";
-    private bool _addSuccess;
 
     private string _trackingDigits = "";
     private bool _showDetailEditCard;
@@ -1148,7 +1884,6 @@
     private bool _querySuccess;
 
     private string _currentFilter = "ALL";
-    private string _listHeaderTitle = "Tüm Kargolar Listesi";
     private string _liveSearch = "";
     private List<CargoStatusResponse> _cachedCargos = new();
     private CargoStatusResponse? _selectedCargo;
@@ -1170,8 +1905,7 @@
             _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
             _tickCounter++;
 
-            // Arka planda ilerleyen kargoları her 5 saniyede bir senkronize et
-            if (_tickCounter % 5 == 0)
+            if (_tickCounter % 4 == 0)
             {
                 await LoadSummaryCountsAsync();
             }
@@ -1181,6 +1915,16 @@
 
         await LoadTurkeyProvincesFromApiAsync();
         await LoadSummaryCountsAsync();
+    }
+
+    private int GetPercentage(int part) => _totalCount == 0 ? 0 : (int)Math.Round((double)part / _totalCount * 100);
+
+    private async Task JumpToLiveMapAsync(string fullTrackingNo)
+    {
+        string digits = fullTrackingNo.Replace("TR-", "");
+        NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi");
+        _liveMapDigits = digits;
+        await StartLiveTrackingAsync();
     }
 
     private async Task LoadTurkeyProvincesFromApiAsync()
@@ -1221,11 +1965,8 @@
         {
             _provinces = new List<ProvinceModel>
             {
-                new() { Name = "Bursa", Districts = new() { "Nilüfer", "Osmangazi", "Yıldırım", "İnegöl", "Mudanya", "Gemlik" } },
-                new() { Name = "İstanbul", Districts = new() { "Kadıköy", "Üsküdar", "Beşiktaş", "Ataşehir", "Maltepe", "Şişli" } },
-                new() { Name = "Ankara", Districts = new() { "Çankaya", "Keçiören", "Yenimahalle", "Mamak", "Gölbaşı" } },
-                new() { Name = "İzmir", Districts = new() { "Konak", "Karşıyaka", "Bornova", "Buca", "Çiğli" } },
-                new() { Name = "Kütahya", Districts = new() { "Merkez", "Tavşanlı", "Simav", "Gediz" } }
+                new() { Name = "Bursa", Districts = new() { "Nilüfer", "Osmangazi", "Yıldırım", "İnegöl", "Mudanya" } },
+                new() { Name = "İstanbul", Districts = new() { "Kadıköy", "Üsküdar", "Beşiktaş", "Ataşehir", "Maltepe" } }
             };
         }
     }
@@ -1256,7 +1997,6 @@
         }
         _activePage = targetPage;
         _breadcrumb = breadcrumbText;
-        _addFeedback = "";
         _queryFeedback = "";
         _liveMapFeedback = "";
     }
@@ -1310,9 +2050,11 @@
             var client = new CargoService.CargoServiceClient(channel);
             var response = await client.GetAllCargosAsync(new EmptyRequest());
 
-            _totalCount = response.Cargos.Count;
-            _activeCount = response.Cargos.Count(c => c.IsActive);
-            _passiveCount = response.Cargos.Count(c => !c.IsActive);
+            _cachedCargos = response.Cargos.ToList();
+            _totalCount = _cachedCargos.Count;
+            _activeCount = _cachedCargos.Count(c => c.IsActive);
+            _passiveCount = _cachedCargos.Count(c => !c.IsActive);
+            _inTransitCount = _cachedCargos.Count(c => c.CurrentStatus == "Yola Çıktı");
             _serverOnline = true;
         }
         catch
@@ -1325,15 +2067,13 @@
     {
         if (string.IsNullOrWhiteSpace(_newSender) || string.IsNullOrWhiteSpace(_newReceiver))
         {
-            _addSuccess = false;
-            _addFeedback = "Lütfen Gönderici ve Alıcı bilgilerini eksiksiz doldurun.";
+            await ShowToast("Gönderici ve alıcı bilgisi zorunludur.", false);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(_newCity) || string.IsNullOrWhiteSpace(_newDistrict) || string.IsNullOrWhiteSpace(_newStreetDetail))
         {
-            _addSuccess = false;
-            _addFeedback = "Lütfen İl, İlçe ve Açık Adres (Mahalle/Sokak) alanlarını eksiksiz seçin.";
+            await ShowToast("İl, ilçe ve açık adres seçilmelidir.", false);
             return;
         }
 
@@ -1354,8 +2094,7 @@
 
             if (response.Success)
             {
-                _addSuccess = true;
-                _addFeedback = $"Kargo başarıyla kaydedildi! Üretilen Takip Numarası: {response.GeneratedTrackingNumber}";
+                await ShowToast($"Sevkiyat Oluşturuldu! Barkod: {response.GeneratedTrackingNumber}", true);
                 _newSender = "";
                 _newReceiver = "";
                 _newCity = "";
@@ -1367,8 +2106,7 @@
         }
         catch (Exception ex)
         {
-            _addSuccess = false;
-            _addFeedback = $"Sunucu hatası: {ex.Message}";
+            await ShowToast($"Sunucu hatası: {ex.Message}", false);
         }
     }
 
@@ -1377,7 +2115,7 @@
         if (_trackingDigits.Length != 4)
         {
             _querySuccess = false;
-            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu eksiksiz girin.";
+            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu girin.";
             return;
         }
 
@@ -1456,15 +2194,7 @@
     {
         if (string.IsNullOrWhiteSpace(_editSender) || string.IsNullOrWhiteSpace(_editReceiver))
         {
-            _querySuccess = false;
-            _queryFeedback = "Gönderici ve Alıcı alanları boş bırakılamaz.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_editCity) || string.IsNullOrWhiteSpace(_editDistrict) || string.IsNullOrWhiteSpace(_editStreetDetail))
-        {
-            _querySuccess = false;
-            _queryFeedback = "Lütfen İl, İlçe ve Mahalle/Sokak detayını eksiksiz doldurun.";
+            await ShowToast("Gönderici ve alıcı boş olamaz.", false);
             return;
         }
 
@@ -1488,45 +2218,21 @@
             if (res.Success)
             {
                 ResetQueryScreen();
-                _querySuccess = true;
-                _queryFeedback = res.Message;
+                await ShowToast($"{_editTrackingNo} kaydı ve durumu güncellendi.", true);
                 await LoadSummaryCountsAsync();
             }
         }
         catch (Exception ex)
         {
-            _querySuccess = false;
-            _queryFeedback = $"Güncelleme hatası: {ex.Message}";
+            await ShowToast($"Güncelleme hatası: {ex.Message}", false);
         }
     }
 
     private async Task LoadCargoListAsync(string filterMode)
     {
         _currentFilter = filterMode;
-        string subTitle = filterMode switch
-        {
-            "ACTIVE" => "Aktif Kargolar",
-            "PASSIVE" => "Pasif (Arşiv) Kargolar",
-            _ => "Tüm Kargolar"
-        };
-        _listHeaderTitle = $"{subTitle} Listesi";
-        _breadcrumb = $"Operasyon Merkezi  >  Kargo Listeleri  >  {subTitle}";
-
-        try
-        {
-            using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
-            var client = new CargoService.CargoServiceClient(channel);
-
-            var res = await client.GetAllCargosAsync(new EmptyRequest());
-            _cachedCargos = res.Cargos.ToList();
-
-            var firstItem = FilteredCargos.FirstOrDefault();
-            _selectedCargo = firstItem;
-        }
-        catch
-        {
-            _serverOnline = false;
-        }
+        await LoadSummaryCountsAsync();
+        _selectedCargo = FilteredCargos.FirstOrDefault();
     }
 
     private IEnumerable<CargoStatusResponse> FilteredCargos
@@ -1561,19 +2267,16 @@
         if (_selectedCargo == null) return;
         await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _selectedCargo.TrackingNumber);
         _copiedJustNow = true;
-        StateHasChanged();
-
+        await ShowToast($"{_selectedCargo.TrackingNumber} panoya kopyalandı.", true);
         await Task.Delay(1200);
         _copiedJustNow = false;
-        StateHasChanged();
     }
 
     private async Task OpenSelectedCargoInEditAsync()
     {
         if (_selectedCargo == null) return;
         string digits = _selectedCargo.TrackingNumber.Replace("TR-", "");
-
-        NavigateTo("QUERY", $"Operasyon Merkezi  >  Düzenle ({_selectedCargo.TrackingNumber})");
+        NavigateTo("QUERY", $"Operasyon Merkezi  /  Düzenle ({_selectedCargo.TrackingNumber})");
         _trackingDigits = digits;
         await FetchCargoForEditAsync(_selectedCargo.TrackingNumber);
     }
@@ -1588,7 +2291,6 @@
             return;
         }
 
-        // Önceki izlemeyi sessizce kapat
         StopLiveTracking(clearMessage: true);
         await Task.Delay(40);
 
@@ -1597,7 +2299,7 @@
 
         string targetTrackNo = $"TR-{_liveMapDigits}";
         _isStreamRunning = true;
-        _liveMapFeedback = $"{targetTrackNo} için canlı GPS akışına bağlanılıyor...";
+        _liveMapFeedback = $"{targetTrackNo} için canlı GPS uydusuna bağlanılıyor...";
         _liveMapSuccess = true;
         StateHasChanged();
 
@@ -1629,7 +2331,7 @@
                 _isMapVisible = true;
                 _courierName = update.CourierName;
                 _liveStepMessage = update.CurrentStepText;
-                _liveMapFeedback = $"Şu an canlı izlenen kargo: {targetTrackNo} (Diğer kargolar arka planda ilerlemeye devam ediyor)";
+                _liveMapFeedback = $"Aktif Telemetri Bağlantısı: {targetTrackNo}";
                 _liveMapSuccess = true;
                 StateHasChanged();
 
@@ -1644,7 +2346,8 @@
                         update.EndLat,
                         update.EndLng,
                         update.Latitude,
-                        update.Longitude);
+                        update.Longitude,
+                        _isDarkMode);
                     isFirstCoordinate = false;
                 }
                 else
@@ -1655,22 +2358,16 @@
                 if (update.IsDelivered)
                 {
                     _liveMapSuccess = true;
-                    _liveMapFeedback = $"{targetTrackNo} teslimat adresine ulaştı ve arşivlendi!";
+                    _liveMapFeedback = $"{targetTrackNo} teslimat noktasına ulaştı!";
+                    await ShowToast($"{targetTrackNo} başarıyla teslim edildi!", true);
                     await LoadSummaryCountsAsync();
                     break;
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Eğer iptal işlemi kullanıcıdan ("Durdur" veya başka kargo aratma) kaynaklandıysa kesinlikle hata basma!
-            if (localCts.IsCancellationRequested)
-            {
-                return;
-            }
-
-            _liveMapSuccess = false;
-            _liveMapFeedback = $"Bağlantı uyarısı: {ex.Message}";
+            if (localCts.IsCancellationRequested) return;
         }
         finally
         {
@@ -1699,7 +2396,7 @@
         else
         {
             _liveMapSuccess = true;
-            _liveMapFeedback = "Canlı izleme durduruldu. Kuryeler arka planda rotalarında ilerlemeye devam ediyor.";
+            _liveMapFeedback = "Canlı izleme durduruldu. Kuryeler arka planda ilerlemeye devam ediyor.";
         }
     }
 
@@ -1710,7 +2407,6 @@
 
         var sb = new StringBuilder();
         sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Teslimat Adresi;Teslim Tarihi");
-
         foreach (var item in list)
         {
             sb.AppendLine($"{item.TrackingNumber};{item.SenderName};{item.ReceiverName};{item.CurrentStatus};{item.LastLocation};{item.EstimatedDelivery}");
@@ -1720,7 +2416,7 @@
         var bytes = utf8WithBom.GetBytes(sb.ToString());
         var base64 = Convert.ToBase64String(bytes);
 
-        string fileName = $"Kargo_Raporu_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        string fileName = $"KargoPro_Rapor_{DateTime.Now:yyyyMMdd_HHmm}.csv";
         await JSRuntime.InvokeVoidAsync("eval", $@"
             (() => {{
                 const link = document.createElement('a');
@@ -1731,6 +2427,7 @@
                 document.body.removeChild(link);
             }})()
         ");
+        await ShowToast("Excel (CSV) raporu indirildi.", true);
     }
 
     private async Task ExportToPdfAsync()
@@ -1738,12 +2435,12 @@
         await JSRuntime.InvokeVoidAsync("window.print");
     }
 
-    private string GetRowColorClass(string status) => status switch
+    private string GetBadgeClass(string status) => status switch
     {
-        "Teslim Edildi" => "row-delivered",
-        "İptal Edildi" => "row-cancelled",
-        "Yola Çıktı" => "row-transit",
-        _ => "row-prep"
+        "Teslim Edildi" => "badge-delivered",
+        "İptal Edildi" => "badge-cancelled",
+        "Yola Çıktı" => "badge-transit",
+        _ => "badge-prep"
     };
 
     public void Dispose()
