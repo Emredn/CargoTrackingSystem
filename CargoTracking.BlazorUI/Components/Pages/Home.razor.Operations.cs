@@ -4,49 +4,11 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 
-namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre gerekirse düzelt
+namespace CargoTracking.BlazorUI.Components.Pages
 {
-    public partial class Home : ComponentBase, IDisposable
+    public partial class Home
     {
-        [Inject]
-        public IJSRuntime JSRuntime { get; set; } = default!;
-
-        private readonly string _serverAddress = "http://localhost:5135";
-        private static readonly HttpClient _apiHttpClient = new();
-
-        public class ProvinceModel
-        {
-            public string Name { get; set; } = "";
-            public List<string> Districts { get; set; } = new();
-        }
-
-        private static List<ProvinceModel> _provinces = new();
-
-        private bool _isDarkMode = true;
-
-        private class ToastMessage
-        {
-            public string Message { get; set; } = "";
-            public bool IsSuccess { get; set; }
-        }
-        private readonly List<ToastMessage> _toasts = new();
-
-        private string _activePage = "HOME";
-        private string _breadcrumb = "Operasyon Merkezi  /  Ana Sayfa";
-        private readonly Stack<(string Page, string Breadcrumb, string Filter)> _navHistory = new();
-
-        private string _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
-        private bool _serverOnline = true;
-        private System.Threading.Timer? _clockTimer;
-        private int _tickCounter = 0;
-
-        private int _totalCount;
-        private int _activeCount;
-        private int _passiveCount;
-        private int _inTransitCount;
-
         private string _newSender = "";
         private string _newReceiver = "";
         private string _newCity = "";
@@ -74,113 +36,6 @@ namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre g
         private CargoStatusResponse? _selectedCargo;
         private bool _copiedJustNow;
 
-        private string _liveMapDigits = "";
-        private string _liveMapFeedback = "";
-        private bool _liveMapSuccess;
-        private bool _isStreamRunning;
-        private bool _isMapVisible;
-        private string _courierName = "Kurye";
-        private string _liveStepMessage = "";
-        private CancellationTokenSource? _streamCts;
-
-        protected override async Task OnInitializedAsync()
-        {
-            _clockTimer = new System.Threading.Timer(async _ =>
-            {
-                _clockText = DateTime.Now.ToString("dd.MM.yyyy  |  HH:mm:ss");
-                _tickCounter++;
-
-                if (_tickCounter % 4 == 0)
-                {
-                    await LoadSummaryCountsAsync();
-                }
-
-                await InvokeAsync(StateHasChanged);
-            }, null, 1000, 1000);
-
-            await LoadTurkeyProvincesFromApiAsync();
-            await LoadSummaryCountsAsync();
-        }
-
-        private async Task ToggleThemeAsync()
-        {
-            _isDarkMode = !_isDarkMode;
-            if (_isMapVisible)
-            {
-                try { await JSRuntime.InvokeVoidAsync("setMapTheme", _isDarkMode); } catch { }
-            }
-        }
-
-        private async Task ShowToast(string message, bool success)
-        {
-            var toast = new ToastMessage { Message = message, IsSuccess = success };
-            _toasts.Add(toast);
-            StateHasChanged();
-            await Task.Delay(3500);
-            _toasts.Remove(toast);
-            StateHasChanged();
-        }
-
-        private int GetPercentage(int part) => _totalCount == 0 ? 0 : (int)Math.Round((double)part / _totalCount * 100);
-
-        private async Task JumpToLiveMapAsync(string fullTrackingNo)
-        {
-            string digits = fullTrackingNo.Replace("TR-", "");
-            NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi");
-            _liveMapDigits = digits;
-            await StartLiveTrackingAsync();
-        }
-
-        private async Task LoadTurkeyProvincesFromApiAsync()
-        {
-            if (_provinces.Any()) return;
-
-            try
-            {
-                string json = await _apiHttpClient.GetStringAsync("https://turkiyeapi.dev/api/v1/provinces");
-                using var doc = JsonDocument.Parse(json);
-                var dataArray = doc.RootElement.GetProperty("data");
-
-                var tempList = new List<ProvinceModel>();
-                foreach (var item in dataArray.EnumerateArray())
-                {
-                    string provName = item.GetProperty("name").GetString() ?? "";
-                    var distList = new List<string>();
-
-                    if (item.TryGetProperty("districts", out var districtsElement))
-                    {
-                        foreach (var d in districtsElement.EnumerateArray())
-                        {
-                            string dName = d.GetProperty("name").GetString() ?? "";
-                            if (!string.IsNullOrEmpty(dName)) distList.Add(dName);
-                        }
-                    }
-
-                    tempList.Add(new ProvinceModel
-                    {
-                        Name = provName,
-                        Districts = distList.OrderBy(x => x).ToList()
-                    });
-                }
-
-                _provinces = tempList.OrderBy(p => p.Name).ToList();
-            }
-            catch
-            {
-                _provinces = new List<ProvinceModel>
-                {
-                    new() { Name = "Bursa", Districts = new() { "Nilüfer", "Osmangazi", "Yıldırım", "İnegöl", "Mudanya" } },
-                    new() { Name = "İstanbul", Districts = new() { "Kadıköy", "Üsküdar", "Beşiktaş", "Ataşehir", "Maltepe" } }
-                };
-            }
-        }
-
-        private IEnumerable<string> GetDistrictsForCity(string cityName)
-        {
-            var prov = _provinces.FirstOrDefault(p => p.Name.Equals(cityName, StringComparison.OrdinalIgnoreCase));
-            return prov != null ? prov.Districts : Enumerable.Empty<string>();
-        }
-
         private void OnNewCityChanged(ChangeEventArgs e)
         {
             _newCity = e.Value?.ToString() ?? "";
@@ -191,30 +46,6 @@ namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre g
         {
             _editCity = e.Value?.ToString() ?? "";
             _editDistrict = "";
-        }
-
-        private void NavigateTo(string targetPage, string breadcrumbText)
-        {
-            if (_activePage != targetPage)
-            {
-                _navHistory.Push((_activePage, _breadcrumb, _currentFilter));
-            }
-            _activePage = targetPage;
-            _breadcrumb = breadcrumbText;
-            _queryFeedback = "";
-            _liveMapFeedback = "";
-        }
-
-        private async Task GoBackAsync()
-        {
-            if (_navHistory.Count == 0) return;
-            StopLiveTracking(clearMessage: true);
-            var prev = _navHistory.Pop();
-            _activePage = prev.Page;
-            _breadcrumb = prev.Breadcrumb;
-
-            if (_activePage == "HOME") await LoadSummaryCountsAsync();
-            else if (_activePage == "LIST") await LoadCargoListAsync(prev.Filter);
         }
 
         private void ResetQueryScreen()
@@ -233,17 +64,6 @@ namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre g
         private async Task OnTrackingCodeKeyDown(KeyboardEventArgs e)
         {
             if (e.Key == "Enter") await SearchCargoByCodeAsync();
-        }
-
-        private void OnLiveMapInput(ChangeEventArgs e)
-        {
-            string raw = e.Value?.ToString() ?? "";
-            _liveMapDigits = new string(raw.Where(char.IsDigit).Take(4).ToArray());
-        }
-
-        private async Task OnLiveMapKeyDown(KeyboardEventArgs e)
-        {
-            if (e.Key == "Enter") await StartLiveTrackingAsync();
         }
 
         private async Task LoadSummaryCountsAsync()
@@ -485,125 +305,6 @@ namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre g
             await FetchCargoForEditAsync(_selectedCargo.TrackingNumber);
         }
 
-        private async Task StartLiveTrackingAsync()
-        {
-            if (_liveMapDigits.Length != 4)
-            {
-                _liveMapSuccess = false;
-                _liveMapFeedback = "Lütfen 4 haneli kargo takip kodunu girin.";
-                _isMapVisible = false;
-                return;
-            }
-
-            StopLiveTracking(clearMessage: true);
-            await Task.Delay(40);
-
-            var localCts = new CancellationTokenSource();
-            _streamCts = localCts;
-
-            string targetTrackNo = $"TR-{_liveMapDigits}";
-            _isStreamRunning = true;
-            _liveMapFeedback = $"{targetTrackNo} için canlı GPS uydusuna bağlanılıyor...";
-            _liveMapSuccess = true;
-            StateHasChanged();
-
-            try
-            {
-                using var channel = global::Grpc.Net.Client.GrpcChannel.ForAddress(_serverAddress);
-                var client = new CargoService.CargoServiceClient(channel);
-
-                using var call = client.StreamCourierLocation(
-                    new CargoLookupRequest { TrackingNumber = targetTrackNo },
-                    cancellationToken: localCts.Token);
-
-                bool isFirstCoordinate = true;
-
-                while (await call.ResponseStream.MoveNext(localCts.Token))
-                {
-                    var update = call.ResponseStream.Current;
-
-                    if (update.Latitude == 0 && update.Longitude == 0)
-                    {
-                        _liveMapSuccess = false;
-                        _liveMapFeedback = update.CurrentStepText;
-                        _isMapVisible = false;
-                        _isStreamRunning = false;
-                        StateHasChanged();
-                        return;
-                    }
-
-                    _isMapVisible = true;
-                    _courierName = update.CourierName;
-                    _liveStepMessage = update.CurrentStepText;
-                    _liveMapFeedback = $"Aktif Telemetri Bağlantısı: {targetTrackNo}";
-                    _liveMapSuccess = true;
-                    StateHasChanged();
-
-                    if (isFirstCoordinate)
-                    {
-                        await Task.Delay(120);
-                        await JSRuntime.InvokeVoidAsync(
-                            "initCargoTrackingMap",
-                            "cargoMapBox",
-                            update.StartLat,
-                            update.StartLng,
-                            update.EndLat,
-                            update.EndLng,
-                            update.Latitude,
-                            update.Longitude,
-                            _isDarkMode);
-                        isFirstCoordinate = false;
-                    }
-                    else
-                    {
-                        await JSRuntime.InvokeVoidAsync("updateCourierLocationOnMap", update.Latitude, update.Longitude);
-                    }
-
-                    if (update.IsDelivered)
-                    {
-                        _liveMapSuccess = true;
-                        _liveMapFeedback = $"{targetTrackNo} teslimat noktasına ulaştı!";
-                        await ShowToast($"{targetTrackNo} başarıyla teslim edildi!", true);
-                        await LoadSummaryCountsAsync();
-                        break;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                if (localCts.IsCancellationRequested) return;
-            }
-            finally
-            {
-                if (_streamCts == localCts)
-                {
-                    _isStreamRunning = false;
-                    StateHasChanged();
-                }
-            }
-        }
-
-        private void StopLiveTracking(bool clearMessage = false)
-        {
-            if (_streamCts != null)
-            {
-                try { _streamCts.Cancel(); } catch { }
-                _streamCts.Dispose();
-                _streamCts = null;
-            }
-            _isStreamRunning = false;
-
-            if (clearMessage)
-            {
-                _liveMapFeedback = "";
-            }
-            else
-            {
-                _liveMapSuccess = true;
-                _liveMapFeedback = "Canlı izleme durduruldu. Kuryeler arka planda ilerlemeye devam ediyor.";
-            }
-        }
-
         private async Task ExportFilteredListToExcelAsync()
         {
             var list = FilteredCargos.ToList();
@@ -637,20 +338,6 @@ namespace CargoTracking.BlazorUI.Components.Pages // Proje namespace'ine göre g
         private async Task ExportToPdfAsync()
         {
             await JSRuntime.InvokeVoidAsync("window.print");
-        }
-
-        private string GetBadgeClass(string status) => status switch
-        {
-            "Teslim Edildi" => "badge-delivered",
-            "İptal Edildi" => "badge-cancelled",
-            "Yola Çıktı" => "badge-transit",
-            _ => "badge-prep"
-        };
-
-        public void Dispose()
-        {
-            StopLiveTracking(clearMessage: true);
-            _clockTimer?.Dispose();
         }
     }
 }

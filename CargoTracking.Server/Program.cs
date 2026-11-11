@@ -7,6 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<CargoRepository>();
 
+builder.Services.AddSingleton<GeoRoutingService>();
+builder.Services.AddSingleton<DeliverySimulationManager>();
+
 var app = builder.Build();
 
 // Yazdığımız gRPC servisini dış dünyaya açıyoruz
