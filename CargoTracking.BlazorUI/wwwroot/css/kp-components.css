@@ -483,10 +483,12 @@
 }
 
 .kp-inspector-body {
-    padding: 18px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     flex: 1;
+    overflow-y: auto;
+    gap: 4px;
 }
 
 .kp-ins-code {
@@ -503,7 +505,7 @@
 }
 
 .kp-ins-row {
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
     .kp-ins-row span {

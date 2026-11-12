@@ -1,0 +1,252 @@
+﻿@page "/sorgula"
+@page "/sorgula/{TrackingNo}"
+@using CargoTracking.Grpc
+@using System.Globalization
+@inject CargoApiClient Api
+@inject LocationService LocService
+@inject UiStateService UiState
+
+<PageTitle>KARGO PRO | Sorgula ve Düzenle</PageTitle>
+
+<div class="kp-form-container" style="max-width: 780px;">
+    <div class="kp-card" style="margin-bottom: 20px;">
+        <div class="kp-card-header">
+            <div>
+                <h3>Kargo Sorgulama ve Operasyon Güncelleme</h3>
+                <p>4 haneli takip numarasını girerek kaydı çağırabilir ve durumunu değiştirebilirsiniz.</p>
+            </div>
+        </div>
+        <div class="kp-card-body">
+            <div class="kp-search-strip">
+                <span class="kp-prefix">TR -</span>
+                <input type="text"
+                       class="kp-code-input"
+                       maxlength="4"
+                       value="@_trackingDigits"
+                       @oninput="OnTrackingCodeInput"
+                       @onkeydown="OnTrackingCodeKeyDown" />
+                <button type="button" class="kp-btn kp-btn-primary" @onclick="SearchCargoByCodeAsync">
+                    KAYDI SORGULA
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_queryFeedback))
+            {
+                <div class="kp-alert @(_querySuccess ? "kp-alert-ok" : "kp-alert-err")">
+                    @_queryFeedback
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_showDetailEditCard)
+    {
+        <div class="kp-card">
+            <div class="kp-card-header">
+                <div>
+                    <h3>Kayıt Detayları: @_editTrackingNo</h3>
+                    <p>Statü: @(_editIsActive ? "AKTİF OPERASYON KAYDI" : "PASİF (ARŞİVLENMİŞ) KAYIT")</p>
+                </div>
+                <StatusBadge Status="@_originalStatus" />
+            </div>
+
+            <div class="kp-card-body">
+                @if (IsAddressLocked)
+                {
+                    <div class="kp-alert kp-alert-err" style="margin-top: 0; margin-bottom: 18px;">
+                        🔒 <strong>Operasyon Kısıtlaması:</strong> Bu sevkiyat şu anda <strong>"@_originalStatus"</strong> durumunda olduğu için teslimat adresi ve alıcı bilgileri kilitlenmiştir. Yalnızca operasyon durumunu güncelleyebilirsiniz.
+                    </div>
+                }
+
+                <div class="kp-grid-2">
+                    <div class="kp-field">
+                        <label>Gönderici Adı Soyadı</label>
+                        <input type="text" class="kp-input" @bind="_editSender" disabled="@IsAddressLocked" />
+                    </div>
+                    <div class="kp-field">
+                        <label>Alıcı Adı Soyadı</label>
+                        <input type="text" class="kp-input" @bind="_editReceiver" disabled="@IsAddressLocked" />
+                    </div>
+                </div>
+
+                <!-- ORTAK İL / İLÇE / MAHALLE / AÇIK ADRES BİLEŞENİ -->
+                <AddressPicker @bind-City="_editCity"
+                               @bind-District="_editDistrict"
+                               @bind-Neighborhood="_editNeighborhood"
+                               @bind-StreetDetail="_editStreetDetail"
+                               Disabled="@IsAddressLocked" />
+
+                <div class="kp-grid-2">
+                    <div class="kp-field">
+                        <label>Tahmini Teslim Tarihi</label>
+                        <input type="date" class="kp-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" disabled="@IsAddressLocked" />
+                    </div>
+                    <div class="kp-field">
+                        <label>Operasyon Durumu</label>
+                        <select class="kp-input" @bind="_editStatus">
+                            <option value="Hazırlanıyor">Hazırlanıyor</option>
+                            <option value="Yola Çıktı">Yola Çıktı</option>
+                            <option value="Teslim Edildi">Teslim Edildi</option>
+                            <option value="İptal Edildi">İptal Edildi</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="button" class="kp-btn kp-btn-warning kp-btn-block" @onclick="SaveEditedCargoAsync">
+                    DEĞİŞİKLİKLERİ VE OPERASYON DURUMUNU KAYDET
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? TrackingNo { get; set; }
+
+    private string _trackingDigits = "";
+    private bool _showDetailEditCard;
+    private string _editTrackingNo = "";
+    private bool _editIsActive;
+    private string _editSender = "";
+    private string _editReceiver = "";
+    private string _editCity = "";
+    private string _editDistrict = "";
+    private string _editNeighborhood = "";
+    private string _editStreetDetail = "";
+    private DateTime _editDeliveryDate = DateTime.Today;
+    private string _editStatus = "Hazırlanıyor";
+    private string _originalStatus = "Hazırlanıyor";
+    private string _originalRawLocation = "";
+    private string _queryFeedback = "";
+    private bool _querySuccess;
+
+    // Kargo "Hazırlanıyor" aşamasından çıktıysa (Yola Çıktı, Teslim Edildi, İptal Edildi) adres kilitlenir!
+    private bool IsAddressLocked => _originalStatus != "Hazırlanıyor";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        UiState.SetBreadcrumb("Operasyon Merkezi  /  Sorgula ve Düzenle");
+        await LocService.EnsureLoadedAsync();
+
+        if (!string.IsNullOrWhiteSpace(TrackingNo))
+        {
+            string cleanDigits = new string(TrackingNo.Where(char.IsDigit).Take(4).ToArray());
+            if (cleanDigits.Length == 4)
+            {
+                _trackingDigits = cleanDigits;
+                await FetchCargoForEditAsync($"TR-{cleanDigits}");
+            }
+        }
+    }
+
+    private void OnTrackingCodeInput(ChangeEventArgs e)
+    {
+        string raw = e.Value?.ToString() ?? "";
+        _trackingDigits = new string(raw.Where(char.IsDigit).Take(4).ToArray());
+    }
+
+    private async Task OnTrackingCodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchCargoByCodeAsync();
+    }
+
+    private async Task SearchCargoByCodeAsync()
+    {
+        if (_trackingDigits.Length != 4)
+        {
+            _querySuccess = false;
+            _queryFeedback = "Lütfen 4 haneli kargo takip kodunu girin.";
+            return;
+        }
+        await FetchCargoForEditAsync($"TR-{_trackingDigits}");
+    }
+
+    private async Task FetchCargoForEditAsync(string fullTrackNo)
+    {
+        try
+        {
+            var res = await Api.Client.GetCargoStatusAsync(new CargoLookupRequest { TrackingNumber = fullTrackNo });
+            if (res.IsFound)
+            {
+                _editTrackingNo = res.TrackingNumber;
+                _editIsActive = res.IsActive;
+                _editSender = res.SenderName;
+                _editReceiver = res.ReceiverName;
+                _editStatus = res.CurrentStatus;
+                _originalStatus = res.CurrentStatus;
+                _originalRawLocation = res.LastLocation;
+
+                LocService.ParseStructuredAddress(res.LastLocation, out _editCity, out _editDistrict, out _editNeighborhood, out _editStreetDetail);
+
+                if (DateTime.TryParseExact(res.EstimatedDelivery, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt))
+                    _editDeliveryDate = dt < DateTime.Today ? DateTime.Today : dt;
+                else
+                    _editDeliveryDate = DateTime.Today;
+
+                _showDetailEditCard = true;
+                _queryFeedback = "";
+                UiState.SetBreadcrumb($"Operasyon Merkezi  /  Düzenle ({_editTrackingNo})");
+            }
+            else
+            {
+                _showDetailEditCard = false;
+                _querySuccess = false;
+                _queryFeedback = $"{fullTrackNo} numaralı kargo sistemde bulunamadı.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _querySuccess = false;
+            _queryFeedback = $"Sorgulama hatası: {ex.Message}";
+        }
+    }
+
+    private async Task SaveEditedCargoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editSender) || string.IsNullOrWhiteSpace(_editReceiver))
+        {
+            await UiState.ShowToastAsync("Gönderici ve alıcı boş olamaz.", false);
+            return;
+        }
+
+        // Eğer adres kilitliyse mevcut adresi hiç bozmadan koru, değilse yeni seçilen adresi paketle
+        string structuredAddress;
+        if (IsAddressLocked)
+        {
+            structuredAddress = _originalRawLocation;
+        }
+        else
+        {
+            string nhPart = string.IsNullOrWhiteSpace(_editNeighborhood) ? "" : $" / {_editNeighborhood.Trim()}";
+            structuredAddress = $"{_editCity.Trim()} / {_editDistrict.Trim()}{nhPart} - {_editStreetDetail.Trim()}";
+        }
+
+        try
+        {
+            var res = await Api.Client.UpdateCargoStatusAsync(new UpdateStatusRequest
+            {
+                TrackingNumber = _editTrackingNo,
+                SenderName = _editSender.Trim(),
+                ReceiverName = _editReceiver.Trim(),
+                LastLocation = structuredAddress,
+                EstimatedDelivery = _editDeliveryDate.ToString("dd.MM.yyyy"),
+                NewStatus = _editStatus
+            });
+
+            if (res.Success)
+            {
+                _showDetailEditCard = false;
+                _trackingDigits = "";
+                await UiState.ShowToastAsync($"{_editTrackingNo} kaydı ve durumu güncellendi.", true);
+
+                var all = await Api.GetAllCargosSafeAsync();
+                UiState.UpdateMetrics(all.Count(c => c.CurrentStatus == "Yola Çıktı"), Api.IsServerOnline);
+            }
+        }
+        catch (Exception ex)
+        {
+            await UiState.ShowToastAsync($"Güncelleme hatası: {ex.Message}", false);
+        }
+    }
+}

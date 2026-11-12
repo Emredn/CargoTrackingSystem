@@ -79,14 +79,22 @@ namespace CargoTracking.Server.Services
 
             string city = "Bursa";
             string district = "Nilüfer";
+            string neighborhood = "";
             string detail = "";
 
             int dashIdx = rawAddress.IndexOf('-');
             string leftPart = dashIdx > 0 ? rawAddress.Substring(0, dashIdx).Trim() : rawAddress;
             detail = dashIdx > 0 ? rawAddress.Substring(dashIdx + 1).Trim() : "";
 
+            // Format: "İl / İlçe / Mahalle - Açık Adres"
             var slashParts = leftPart.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (slashParts.Length >= 2)
+            if (slashParts.Length >= 3)
+            {
+                city = slashParts[0].Trim();
+                district = slashParts[1].Trim();
+                neighborhood = slashParts[2].Trim();
+            }
+            else if (slashParts.Length == 2)
             {
                 city = slashParts[0].Trim();
                 district = slashParts[1].Trim();
@@ -96,18 +104,38 @@ namespace CargoTracking.Server.Services
                 city = slashParts[0].Trim();
             }
 
+            // Nominatim'in daha kolay bulması için "Mah." kısaltmasını temizle
+            string cleanNeighborhood = neighborhood
+                .Replace("Mahallesi", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("Mah.", "", StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            // 1. ÇIKIŞ NOKTASI (İl Ana Transfer Merkezi)
             string hubQuery = $"state={Uri.EscapeDataString(city)}&city={Uri.EscapeDataString(city)}";
             var hubCoords = await _geoService.GeocodeLockedAsync(hubQuery)
                          ?? await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString(city + " Merkez, Türkiye")}")
                          ?? (40.1885, 29.0610);
 
             (double Lat, double Lng)? destCoords = null;
+
+            // AŞAMA 1: Cadde/Sokak + Mahalle + İlçe + İl dene
             if (!string.IsNullOrWhiteSpace(detail))
             {
-                string fullQuery = $"q={Uri.EscapeDataString($"{detail}, {district}, {city}, Türkiye")}";
-                destCoords = await _geoService.GeocodeLockedAsync(fullQuery);
+                string q1 = !string.IsNullOrWhiteSpace(cleanNeighborhood)
+                    ? $"{detail}, {cleanNeighborhood}, {district}, {city}, Türkiye"
+                    : $"{detail}, {district}, {city}, Türkiye";
+
+                destCoords = await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString(q1)}");
             }
 
+            // AŞAMA 2 (MAHALLE GARANTİSİ): Açık adresteki bina/kapı no yüzünden bulamadıysa direkt MAHALLEYE git!
+            if (destCoords == null && !string.IsNullOrWhiteSpace(cleanNeighborhood))
+            {
+                destCoords = await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString($"{cleanNeighborhood} Mahallesi, {district}, {city}, Türkiye")}")
+                          ?? await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString($"{cleanNeighborhood}, {district}, {city}, Türkiye")}");
+            }
+
+            // AŞAMA 3: Mahalle de bulunamazsa İlçe merkezine git
             if (destCoords == null)
             {
                 string districtQuery = $"city={Uri.EscapeDataString(district)}&state={Uri.EscapeDataString(city)}";

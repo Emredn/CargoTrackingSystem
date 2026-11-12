@@ -1,0 +1,250 @@
+﻿@page "/canli"
+@page "/canli/{TrackingNo}"
+@using CargoTracking.Grpc
+@implements IDisposable
+@inject CargoApiClient Api
+@inject UiStateService UiState
+@inject IJSRuntime JSRuntime
+
+<PageTitle>KARGO PRO | Canlı Kargo Takibi</PageTitle>
+
+<div class="kp-map-page">
+    <div class="kp-card" style="margin-bottom: 18px;">
+        <div class="kp-card-header">
+            <div>
+                <h3>Gerçek Zamanlı GPS Telemetri ve Rota Takibi</h3>
+                <p>Yola çıkan tüm kargolar arka planda eşzamanlı ilerler. Kod girerek veya aşağıdaki aktif butonlara tıklayarak bağlanın.</p>
+            </div>
+        </div>
+        <div class="kp-card-body">
+            <div class="kp-search-strip">
+                <span class="kp-prefix">TR -</span>
+                <input type="text"
+                       class="kp-code-input"
+                       maxlength="4"
+                       value="@_liveMapDigits"
+                       @oninput="OnLiveMapInput"
+                       @onkeydown="OnLiveMapKeyDown" />
+                <button type="button" class="kp-btn kp-btn-primary" @onclick="StartLiveTrackingAsync">
+                    CANLI KONUMA BAĞLAN
+                </button>
+                @if (_isStreamRunning)
+                {
+                    <button type="button" class="kp-btn kp-btn-danger" @onclick="() => StopLiveTracking(clearMessage: false)">
+                        AKIŞI DURDUR
+                    </button>
+                }
+            </div>
+
+            <!-- YOLA ÇIKMIŞ KARGOLAR İÇİN HIZLI SEÇİM ÇUBUĞU -->
+            @if (_inTransitCargos.Any())
+            {
+                <div class="kp-quick-chips">
+                    <span>Sahadaki Aktif Kuryeler (Hızlı Geçiş):</span>
+                    @foreach (var c in _inTransitCargos)
+                    {
+                        <button type="button" class="kp-chip" @onclick="() => QuickConnectAsync(c.TrackingNumber)">
+                            🚚 @c.TrackingNumber (@c.LastLocation.Split('-')[0])
+                        </button>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_liveMapFeedback))
+            {
+                <div class="kp-alert @(_liveMapSuccess ? "kp-alert-ok" : "kp-alert-err")" style="margin-top:14px;">
+                    @_liveMapFeedback
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_isMapVisible)
+    {
+        <div class="kp-telemetry-bar">
+            <div class="kp-tel-left">
+                <span class="kp-pulse-dot"></span>
+                <strong>@_courierName</strong>
+            </div>
+            <div class="kp-tel-right">@_liveStepMessage</div>
+        </div>
+
+        <div id="cargoMapBox" class="kp-map-canvas"></div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? TrackingNo { get; set; }
+
+    private List<CargoStatusResponse> _inTransitCargos = new();
+    private string _liveMapDigits = "";
+    private string _liveMapFeedback = "";
+    private bool _liveMapSuccess;
+    private bool _isStreamRunning;
+    private bool _isMapVisible;
+    private string _courierName = "Kurye";
+    private string _liveStepMessage = "";
+    private CancellationTokenSource? _streamCts;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        UiState.SetBreadcrumb("Operasyon Merkezi  /  Canlı Kargo Takibi");
+        await LoadInTransitListAsync();
+
+        if (!string.IsNullOrWhiteSpace(TrackingNo))
+        {
+            string digits = new string(TrackingNo.Where(char.IsDigit).Take(4).ToArray());
+            if (digits.Length == 4)
+            {
+                _liveMapDigits = digits;
+                await StartLiveTrackingAsync();
+            }
+        }
+    }
+
+    private async Task LoadInTransitListAsync()
+    {
+        var all = await Api.GetAllCargosSafeAsync();
+        _inTransitCargos = all.Where(c => c.CurrentStatus == "Yola Çıktı").ToList();
+        UiState.UpdateMetrics(_inTransitCargos.Count, Api.IsServerOnline);
+    }
+
+    private async Task QuickConnectAsync(string fullTrackingNo)
+    {
+        _liveMapDigits = fullTrackingNo.Replace("TR-", "");
+        await StartLiveTrackingAsync();
+    }
+
+    private void OnLiveMapInput(ChangeEventArgs e)
+    {
+        string raw = e.Value?.ToString() ?? "";
+        _liveMapDigits = new string(raw.Where(char.IsDigit).Take(4).ToArray());
+    }
+
+    private async Task OnLiveMapKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await StartLiveTrackingAsync();
+    }
+
+    private async Task StartLiveTrackingAsync()
+    {
+        if (_liveMapDigits.Length != 4)
+        {
+            _liveMapSuccess = false;
+            _liveMapFeedback = "Lütfen 4 haneli kargo takip kodunu girin.";
+            _isMapVisible = false;
+            return;
+        }
+
+        StopLiveTracking(clearMessage: true);
+        await Task.Delay(40);
+
+        var localCts = new CancellationTokenSource();
+        _streamCts = localCts;
+
+        string targetTrackNo = $"TR-{_liveMapDigits}";
+        _isStreamRunning = true;
+        _liveMapFeedback = $"{targetTrackNo} için canlı GPS uydusuna bağlanılıyor...";
+        _liveMapSuccess = true;
+        StateHasChanged();
+
+        try
+        {
+            using var call = Api.Client.StreamCourierLocation(
+                new CargoLookupRequest { TrackingNumber = targetTrackNo },
+                cancellationToken: localCts.Token);
+
+            bool isFirstCoordinate = true;
+
+            while (await call.ResponseStream.MoveNext(localCts.Token))
+            {
+                var update = call.ResponseStream.Current;
+
+                if (update.Latitude == 0 && update.Longitude == 0)
+                {
+                    _liveMapSuccess = false;
+                    _liveMapFeedback = update.CurrentStepText;
+                    _isMapVisible = false;
+                    _isStreamRunning = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                _isMapVisible = true;
+                _courierName = update.CourierName;
+                _liveStepMessage = update.CurrentStepText;
+                _liveMapFeedback = $"Aktif Telemetri Bağlantısı: {targetTrackNo}";
+                _liveMapSuccess = true;
+                StateHasChanged();
+
+                if (isFirstCoordinate)
+                {
+                    await Task.Delay(120);
+                    await JSRuntime.InvokeVoidAsync(
+                        "initCargoTrackingMap",
+                        "cargoMapBox",
+                        update.StartLat,
+                        update.StartLng,
+                        update.EndLat,
+                        update.EndLng,
+                        update.Latitude,
+                        update.Longitude,
+                        UiState.IsDarkMode);
+                    isFirstCoordinate = false;
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("updateCourierLocationOnMap", update.Latitude, update.Longitude);
+                }
+
+                if (update.IsDelivered)
+                {
+                    _liveMapSuccess = true;
+                    _liveMapFeedback = $"{targetTrackNo} teslimat noktasına ulaştı!";
+                    await UiState.ShowToastAsync($"{targetTrackNo} başarıyla teslim edildi!", true);
+                    await LoadInTransitListAsync();
+                    break;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            if (localCts.IsCancellationRequested) return;
+        }
+        finally
+        {
+            if (_streamCts == localCts)
+            {
+                _isStreamRunning = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void StopLiveTracking(bool clearMessage = false)
+    {
+        if (_streamCts != null)
+        {
+            try { _streamCts.Cancel(); } catch { }
+            _streamCts.Dispose();
+            _streamCts = null;
+        }
+        _isStreamRunning = false;
+
+        if (clearMessage)
+        {
+            _liveMapFeedback = "";
+        }
+        else
+        {
+            _liveMapSuccess = true;
+            _liveMapFeedback = "Canlı izleme durduruldu. Kuryeler arka planda ilerlemeye devam ediyor.";
+        }
+    }
+
+    public void Dispose()
+    {
+        StopLiveTracking(clearMessage: true);
+    }
+}

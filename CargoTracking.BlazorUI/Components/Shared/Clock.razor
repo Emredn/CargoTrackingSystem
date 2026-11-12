@@ -1,0 +1,29 @@
+﻿@implements IDisposable
+
+@if (Minimal)
+{
+    <span class="kp-mob-clock" title="Sistem Saati">@_now.ToString("HH:mm")</span>
+}
+else
+{
+    <div class="kp-clock-pill">@_now.ToString("dd.MM.yyyy  |  HH:mm:ss")</div>
+}
+
+@code {
+    [Parameter]
+    public bool Minimal { get; set; }
+
+    private DateTime _now = DateTime.Now;
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Threading.Timer(_ =>
+        {
+            _now = DateTime.Now;
+            InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

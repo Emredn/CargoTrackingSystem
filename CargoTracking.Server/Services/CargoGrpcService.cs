@@ -82,6 +82,9 @@ namespace CargoTracking.Server.Services
 
         public override async Task<UpdateStatusResponse> UpdateCargoStatus(UpdateStatusRequest request, ServerCallContext context)
         {
+            var existingRecord = _repository.GetByTrackingNumber(request.TrackingNumber);
+            string oldStatus = existingRecord?.CurrentStatus ?? "";
+
             bool result = _repository.UpdateCargoAndStatus(
                 request.TrackingNumber,
                 request.SenderName,
@@ -93,7 +96,11 @@ namespace CargoTracking.Server.Services
 
             if (result && request.NewStatus == "Yola Çıktı")
             {
-                _simManager.RemoveSimulation(request.TrackingNumber);
+                // Sadece yeni yola çıkıyorsa simülasyonu sıfırla, zaten yoldaysa kuryenin konumunu bozma!
+                if (oldStatus != "Yola Çıktı")
+                {
+                    _simManager.RemoveSimulation(request.TrackingNumber);
+                }
                 await _simManager.EnsureSimulationStartedAsync(request.TrackingNumber, request.LastLocation);
             }
             else if (result && request.NewStatus != "Yola Çıktı")

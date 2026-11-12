@@ -1,3 +1,100 @@
 ﻿@inherits LayoutComponentBase
+@using CargoTracking.BlazorUI.Services
+@implements IDisposable
+@inject UiStateService UiState
+@inject CargoApiClient Api
+@inject IJSRuntime JSRuntime
 
-@Body
+<div class="kp-app @(UiState.IsDarkMode ? "kp-dark" : "kp-light")">
+
+    <!-- SAĞ ÜST BİLDİRİM KUTUSU -->
+    <ToastHost />
+
+    <!-- SOL KURUMSAL MENÜ -->
+    <Sidebar />
+
+    <!-- SAĞ ANA BÖLGE -->
+    <div class="kp-main">
+        <header class="kp-topbar no-print">
+            <div class="kp-topbar-left">
+                <button type="button" class="kp-btn-back" @onclick="GoBackInBrowserAsync">
+                    ← Geri
+                </button>
+                <div class="kp-breadcrumb">@UiState.Breadcrumb</div>
+            </div>
+
+            <div class="kp-topbar-right">
+                <div class="kp-status-pill @(UiState.ServerOnline ? "online" : "offline")">
+                    <span class="kp-dot"></span>
+                    @(UiState.ServerOnline ? "gRPC Sunucu Aktif (5135)" : "Sunucu Bağlantısı Yok")
+                </div>
+
+                <Clock Minimal="false" />
+
+                <button type="button" class="kp-theme-btn" @onclick="() => UiState.ToggleThemeAsync(JSRuntime)">
+                    @if (UiState.IsDarkMode)
+                    {
+                        <span>☀️ Gündüz Modu</span>
+                    }
+                    else
+                    {
+                        <span>🌙 Gece Modu</span>
+                    }
+                </button>
+            </div>
+        </header>
+
+        <main class="kp-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private PeriodicTimer? _bgTimer;
+    private CancellationTokenSource _cts = new();
+
+    protected override void OnInitialized()
+    {
+        UiState.OnChange += HandleStateChanged;
+        _ = RunBackgroundSyncLoopAsync();
+    }
+
+    private async Task RunBackgroundSyncLoopAsync()
+    {
+        // İlk açılışta hemen çek
+        var initialList = await Api.GetAllCargosSafeAsync();
+        await InvokeAsync(() => UiState.SyncCargosAsync(initialList, Api.IsServerOnline));
+
+        // Sonra her 3 saniyede bir arka planda sessizce senkronize et
+        _bgTimer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        try
+        {
+            while (await _bgTimer.WaitForNextTickAsync(_cts.Token))
+            {
+                var list = await Api.GetAllCargosSafeAsync();
+                await InvokeAsync(() => UiState.SyncCargosAsync(list, Api.IsServerOnline));
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void HandleStateChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task GoBackInBrowserAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("history.back");
+        }
+        catch { }
+    }
+
+    public void Dispose()
+    {
+        UiState.OnChange -= HandleStateChanged;
+        _cts.Cancel();
+        _bgTimer?.Dispose();
+        _cts.Dispose();
+    }
+}

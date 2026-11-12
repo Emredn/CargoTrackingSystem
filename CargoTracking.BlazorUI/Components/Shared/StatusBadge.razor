@@ -1,0 +1,19 @@
+﻿<span class="kp-badge @GetBadgeClass(Status)" style="@Style">
+    ● @Status
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Status { get; set; } = "Hazırlanıyor";
+
+    [Parameter]
+    public string? Style { get; set; }
+
+    private static string GetBadgeClass(string status) => status switch
+    {
+        "Teslim Edildi" => "badge-delivered",
+        "İptal Edildi" => "badge-cancelled",
+        "Yola Çıktı" => "badge-transit",
+        _ => "badge-prep"
+    };
+}

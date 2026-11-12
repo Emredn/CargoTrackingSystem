@@ -1,0 +1,76 @@
+﻿@using CargoTracking.BlazorUI.Services
+@implements IDisposable
+@inject UiStateService UiState
+@inject IJSRuntime JSRuntime
+
+<aside class="kp-sidebar no-print">
+    <div class="kp-brand">
+        <div class="kp-brand-left">
+            <div class="kp-logo-box">KP</div>
+            <div>
+                <h1>KARGO PRO</h1>
+                <span>KURUMSAL LOJİSTİK AĞI</span>
+            </div>
+        </div>
+
+        <!-- MOBİLDE KARGO PRO YANINDAKİ MİNİMAL SAAT VE EMOJİ BUTONU -->
+        <div class="kp-mobile-QuickBar">
+            <Clock Minimal="true" />
+
+            <button type="button" class="kp-mob-theme-icon-btn" @onclick="() => UiState.ToggleThemeAsync(JSRuntime)" title="Tema Değiştir">
+                @(UiState.IsDarkMode ? "☀️" : "🌙")
+            </button>
+        </div>
+    </div>
+
+    <div class="kp-nav-group-title">OPERASYON MERKEZİ</div>
+    <nav class="kp-nav">
+        <NavLink class="kp-nav-item" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>ANA SAYFA</span>
+        </NavLink>
+
+        <NavLink class="kp-nav-item" href="yeni">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>YENİ KARGO KAYDI</span>
+        </NavLink>
+
+        <NavLink class="kp-nav-item" href="sorgula">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span>SORGULA VE DÜZENLE</span>
+        </NavLink>
+
+        <NavLink class="kp-nav-item" href="liste">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <span>KARGO LİSTELERİ</span>
+        </NavLink>
+
+        <NavLink class="kp-nav-item" href="canli">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+            <span>CANLI KARGO TAKİBİ</span>
+            @if (UiState.InTransitCount > 0)
+            {
+                <span class="kp-nav-pill">@UiState.InTransitCount</span>
+            }
+        </NavLink>
+    </nav>
+
+    <div class="kp-sidebar-bottom">
+        <div class="kp-sys-box">
+            <div class="kp-sys-row">
+                <span>Rota Motoru</span>
+                <strong>OSRM / Dijkstra</strong>
+            </div>
+            <div class="kp-sys-row">
+                <span>İletişim Katmanı</span>
+                <strong>gRPC HTTP/2</strong>
+            </div>
+        </div>
+        <div class="kp-copyright">Kargo Pro Enterprise v3.0</div>
+    </div>
+</aside>
+
+@code {
+    protected override void OnInitialized() => UiState.OnChange += StateHasChanged;
+    public void Dispose() => UiState.OnChange -= StateHasChanged;
+}

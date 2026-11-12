@@ -1,0 +1,136 @@
+﻿@using CargoTracking.BlazorUI.Services
+@inject LocationService LocService
+
+<div class="kp-grid-2">
+    <div class="kp-field">
+        <label>Teslimat İli</label>
+        <select class="kp-input" value="@City" @onchange="OnCitySelectChanged" disabled="@Disabled">
+            <option value="">-- İl Seçiniz --</option>
+            @foreach (var prov in LocService.Provinces)
+            {
+                <option value="@prov.Name">@prov.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="kp-field">
+        <label>Teslimat İlçesi</label>
+        <select class="kp-input" value="@District" @onchange="OnDistrictSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(City))">
+            <option value="">-- İlçe Seçiniz --</option>
+            @foreach (var dist in LocService.GetDistricts(City))
+            {
+                <option value="@dist">@dist</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="kp-grid-2">
+    <div class="kp-field">
+        <label>Teslimat Mahallesi / Köyü</label>
+        <select class="kp-input" value="@Neighborhood" @onchange="OnNeighborhoodSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(District) || _loadingNeighborhoods)">
+            <option value="">@(_loadingNeighborhoods ? "Mahalleler yükleniyor..." : "-- Mahalle Seçiniz --")</option>
+            @foreach (var nh in _neighborhoods)
+            {
+                <option value="@nh">@nh</option>
+            }
+        </select>
+    </div>
+
+    <div class="kp-field">
+        <label>Cadde, Sokak, Bina ve Kapı No</label>
+        <input type="text"
+               class="kp-input"
+               placeholder="Örn: Atatürk Cad. No: 12 Daire: 4"
+               value="@StreetDetail"
+               @oninput="OnStreetInput"
+               disabled="@Disabled" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string City { get; set; } = "";
+    [Parameter] public EventCallback<string> CityChanged { get; set; }
+
+    [Parameter] public string District { get; set; } = "";
+    [Parameter] public EventCallback<string> DistrictChanged { get; set; }
+
+    [Parameter] public string Neighborhood { get; set; } = "";
+    [Parameter] public EventCallback<string> NeighborhoodChanged { get; set; }
+
+    [Parameter] public string StreetDetail { get; set; } = "";
+    [Parameter] public EventCallback<string> StreetDetailChanged { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private List<string> _neighborhoods = new();
+    private bool _loadingNeighborhoods;
+    private string _lastLoadedCity = "";
+    private string _lastLoadedDistrict = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LocService.EnsureLoadedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (City != _lastLoadedCity || District != _lastLoadedDistrict)
+        {
+            _lastLoadedCity = City;
+            _lastLoadedDistrict = District;
+            await LoadNeighborhoodsInternalAsync();
+        }
+    }
+
+    private async Task LoadNeighborhoodsInternalAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(City) && !string.IsNullOrWhiteSpace(District))
+        {
+            _loadingNeighborhoods = true;
+            StateHasChanged();
+            _neighborhoods = await LocService.GetNeighborhoodsAsync(City, District);
+            _loadingNeighborhoods = false;
+            StateHasChanged();
+        }
+        else
+        {
+            _neighborhoods.Clear();
+        }
+    }
+
+    private async Task OnCitySelectChanged(ChangeEventArgs e)
+    {
+        City = e.Value?.ToString() ?? "";
+        District = "";
+        Neighborhood = "";
+        _neighborhoods.Clear();
+
+        await CityChanged.InvokeAsync(City);
+        await DistrictChanged.InvokeAsync(District);
+        await NeighborhoodChanged.InvokeAsync(Neighborhood);
+    }
+
+    private async Task OnDistrictSelectChanged(ChangeEventArgs e)
+    {
+        District = e.Value?.ToString() ?? "";
+        Neighborhood = "";
+
+        await DistrictChanged.InvokeAsync(District);
+        await NeighborhoodChanged.InvokeAsync(Neighborhood);
+
+        await LoadNeighborhoodsInternalAsync();
+    }
+
+    private async Task OnNeighborhoodSelectChanged(ChangeEventArgs e)
+    {
+        Neighborhood = e.Value?.ToString() ?? "";
+        await NeighborhoodChanged.InvokeAsync(Neighborhood);
+    }
+
+    private async Task OnStreetInput(ChangeEventArgs e)
+    {
+        StreetDetail = e.Value?.ToString() ?? "";
+        await StreetDetailChanged.InvokeAsync(StreetDetail);
+    }
+}

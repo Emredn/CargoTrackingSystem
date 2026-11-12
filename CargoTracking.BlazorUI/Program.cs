@@ -6,6 +6,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddSingleton<CargoTracking.BlazorUI.Services.CargoApiClient>();
+builder.Services.AddSingleton<CargoTracking.BlazorUI.Services.LocationService>();
+builder.Services.AddScoped<CargoTracking.BlazorUI.Services.UiStateService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

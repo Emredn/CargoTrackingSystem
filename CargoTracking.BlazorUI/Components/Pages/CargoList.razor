@@ -1,0 +1,237 @@
+﻿@page "/liste"
+@page "/liste/{Filter}"
+@using CargoTracking.Grpc
+@using System.Text
+@implements IDisposable
+@inject CargoApiClient Api
+@inject UiStateService UiState
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+<PageTitle>KARGO PRO | Kargo Listeleri</PageTitle>
+
+<div class="kp-list-page">
+    <div class="kp-toolbar no-print">
+        <div class="kp-tabs">
+            <button type="button" class="kp-tab @(_currentFilter == "ALL" ? "active" : "")" @onclick='() => SetFilter("ALL")'>
+                TÜM KARGOLAR (@_cargos.Count)
+            </button>
+            <button type="button" class="kp-tab @(_currentFilter == "ACTIVE" ? "active" : "")" @onclick='() => SetFilter("ACTIVE")'>
+                AKTİF OPERASYON (@_cargos.Count(c => c.IsActive))
+            </button>
+            <button type="button" class="kp-tab @(_currentFilter == "PASSIVE" ? "active" : "")" @onclick='() => SetFilter("PASSIVE")'>
+                ARŞİV (@_cargos.Count(c => !c.IsActive))
+            </button>
+        </div>
+
+        <div class="kp-toolbar-right">
+            <input type="text" class="kp-input kp-search-input" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip kodu, alıcı veya şehir ara..." />
+            <button type="button" class="kp-btn kp-btn-sm kp-btn-success" @onclick="ExportFilteredListToExcelAsync">Excel (CSV)</button>
+            <button type="button" class="kp-btn kp-btn-sm kp-btn-danger" @onclick="ExportToPdfAsync">PDF Yazdır</button>
+        </div>
+    </div>
+
+    <div class="kp-list-layout">
+        <div class="kp-card kp-table-card">
+            <table class="kp-table">
+                <thead>
+                    <tr>
+                        <th style="width: 110px;">Takip No</th>
+                        <th style="width: 150px;">Gönderici</th>
+                        <th style="width: 150px;">Alıcı</th>
+                        <th style="width: 140px;">Operasyon Durumu</th>
+                        <th>Teslimat Adresi</th>
+                        <th style="width: 115px;">Teslim Tarihi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!FilteredCargos.Any())
+                    {
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding: 40px;">Arama kriterlerine uygun kargo kaydı bulunamadı.</td>
+                        </tr>
+                    }
+                    @foreach (var item in FilteredCargos)
+                    {
+                        <tr class="@(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "kp-row-selected" : "")"
+                            @onclick="() => SelectCargoForPreview(item)">
+                            <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
+                            <td>@item.SenderName</td>
+                            <td>@item.ReceiverName</td>
+                            <td><StatusBadge Status="@item.CurrentStatus" /></td>
+                            <td>@item.LastLocation</td>
+                            <td>@item.EstimatedDelivery</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- SAĞ DETAY DENETÇİSİ -->
+        <div class="kp-card kp-inspector no-print">
+            <div class="kp-inspector-head">SEVKİYAT DENETİM KARTI</div>
+            @if (_selectedCargo != null)
+            {
+                <div class="kp-inspector-body">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div class="kp-ins-code" style="margin-bottom:0;">@_selectedCargo.TrackingNumber</div>
+                        <StatusBadge Status="@_selectedCargo.CurrentStatus" />
+                    </div>
+
+                    <button type="button" class="kp-btn kp-btn-outline kp-btn-sm kp-btn-block" @onclick="CopySelectedTrackNoAsync">
+                        @(_copiedJustNow ? "✓ PANOYA KOPYALANDI" : "BARKOD KODUNU KOPYALA")
+                    </button>
+
+                    <div class="kp-divider" style="margin: 10px 0;"></div>
+
+                    <div class="kp-ins-row"><span>GÖNDERİCİ</span><strong>@_selectedCargo.SenderName</strong></div>
+                    <div class="kp-ins-row"><span>ALICI</span><strong>@_selectedCargo.ReceiverName</strong></div>
+                    <div class="kp-ins-row"><span>TESLİMAT ADRESİ</span><strong>@_selectedCargo.LastLocation</strong></div>
+                    <div class="kp-ins-row"><span>TAHMİNİ TESLİM</span><strong>@_selectedCargo.EstimatedDelivery</strong></div>
+                    <div class="kp-ins-row"><span>KAYIT SINIFI</span><strong>@(_selectedCargo.IsActive ? "Aktif Operasyon" : "Pasif Arşiv")</strong></div>
+
+                    <div style="margin-top:auto; padding-top:8px; display:flex; flex-direction:column; gap:6px;">
+                        @if (_selectedCargo.CurrentStatus == "Yola Çıktı")
+                        {
+                            <button type="button" class="kp-btn kp-btn-primary kp-btn-sm kp-btn-block" @onclick='() => Nav.NavigateTo($"/canli/{_selectedCargo.TrackingNumber.Replace("TR-", "")}")'>
+                                🚚 CANLI HARİTADA İZLE →
+                            </button>
+                        }
+                        <button type="button" class="kp-btn kp-btn-warning kp-btn-sm kp-btn-block" @onclick='() => Nav.NavigateTo($"/sorgula/{_selectedCargo.TrackingNumber.Replace("TR-", "")}")'>
+                            ✏️ KAYDI DÜZENLE →
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="kp-empty-state">Detayları incelemek için tablodan bir sevkiyat seçiniz.</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Filter { get; set; }
+
+    private List<CargoStatusResponse> _cargos = new();
+    private CargoStatusResponse? _selectedCargo;
+    private string _currentFilter = "ALL";
+    private string _liveSearch = "";
+    private bool _copiedJustNow;
+
+    protected override void OnInitialized()
+    {
+        UiState.OnChange += OnUiStateUpdated;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _currentFilter = string.IsNullOrWhiteSpace(Filter) ? "ALL" : Filter.ToUpperInvariant();
+        UiState.SetBreadcrumb("Operasyon Merkezi  /  Kargo Listeleri");
+
+        _cargos = await Api.GetAllCargosSafeAsync();
+        await UiState.SyncCargosAsync(_cargos, Api.IsServerOnline);
+        _selectedCargo = FilteredCargos.FirstOrDefault();
+    }
+
+    private void OnUiStateUpdated()
+    {
+        if (UiState.CachedCargos.Any())
+        {
+            _cargos = UiState.CachedCargos;
+
+            // Seçili olan kargonun güncel halini (örneğin Teslim Edildi bilgisini) sağ karta da yansıt
+            if (_selectedCargo != null)
+            {
+                _selectedCargo = _cargos.FirstOrDefault(c => c.TrackingNumber == _selectedCargo.TrackingNumber)
+                                 ?? FilteredCargos.FirstOrDefault();
+            }
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SetFilter(string mode)
+    {
+        _currentFilter = mode;
+        _selectedCargo = FilteredCargos.FirstOrDefault();
+    }
+
+    private IEnumerable<CargoStatusResponse> FilteredCargos
+    {
+        get
+        {
+            IEnumerable<CargoStatusResponse> q = _cargos;
+            if (_currentFilter == "ACTIVE") q = q.Where(c => c.IsActive);
+            else if (_currentFilter == "PASSIVE") q = q.Where(c => !c.IsActive);
+
+            if (!string.IsNullOrWhiteSpace(_liveSearch))
+            {
+                string s = _liveSearch.Trim().ToLower();
+                q = q.Where(c =>
+                    c.TrackingNumber.ToLower().Contains(s) ||
+                    c.SenderName.ToLower().Contains(s) ||
+                    c.ReceiverName.ToLower().Contains(s) ||
+                    c.LastLocation.ToLower().Contains(s));
+            }
+            return q;
+        }
+    }
+
+    private void SelectCargoForPreview(CargoStatusResponse cargo)
+    {
+        _selectedCargo = cargo;
+        _copiedJustNow = false;
+    }
+
+    private async Task CopySelectedTrackNoAsync()
+    {
+        if (_selectedCargo == null) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _selectedCargo.TrackingNumber);
+        _copiedJustNow = true;
+        await UiState.ShowToastAsync($"{_selectedCargo.TrackingNumber} panoya kopyalandı.", true);
+        await Task.Delay(1200);
+        _copiedJustNow = false;
+    }
+
+    private async Task ExportFilteredListToExcelAsync()
+    {
+        var list = FilteredCargos.ToList();
+        if (!list.Any()) return;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Teslimat Adresi;Teslim Tarihi");
+        foreach (var item in list)
+        {
+            sb.AppendLine($"{item.TrackingNumber};{item.SenderName};{item.ReceiverName};{item.CurrentStatus};{item.LastLocation};{item.EstimatedDelivery}");
+        }
+
+        var utf8WithBom = new UTF8Encoding(true);
+        var bytes = utf8WithBom.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+
+        string fileName = $"KargoPro_Rapor_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("eval", $@"
+            (() => {{
+                const link = document.createElement('a');
+                link.download = '{fileName}';
+                link.href = 'data:text/csv;charset=utf-8;base64,{base64}';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }})()
+        ");
+        await UiState.ShowToastAsync("Excel (CSV) raporu indirildi.", true);
+    }
+
+    private async Task ExportToPdfAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    public void Dispose()
+    {
+        UiState.OnChange -= OnUiStateUpdated;
+    }
+}

@@ -1,630 +1,172 @@
 ﻿@page "/"
-@rendermode InteractiveServer
+@using CargoTracking.Grpc
+@inject CargoApiClient Api
+@inject UiStateService UiState
+@inject NavigationManager Nav
 
-<PageTitle>KARGO PRO | Kurumsal Lojistik ve Operasyon Yönetim Sistemi</PageTitle>
+<PageTitle>KARGO PRO | Ana Sayfa</PageTitle>
 
-<div class="kp-app @(_isDarkMode ? "kp-dark" : "kp-light")">
-
-    <!-- SAĞ ÜST KÖŞE KURUMSAL TOAST BİLDİRİMLERİ -->
-    <div class="kp-toast-stack no-print">
-        @foreach (var toast in _toasts)
-        {
-            <div class="kp-toast @(toast.IsSuccess ? "kp-toast-ok" : "kp-toast-err")">
-                <div class="kp-toast-indicator"></div>
-                <div class="kp-toast-content">
-                    <strong>@(toast.IsSuccess ? "OPERASYON ONAYI" : "SİSTEM UYARISI")</strong>
-                    <span>@toast.Message</span>
-                </div>
-            </div>
-        }
+<div class="kp-dashboard">
+    <!-- ÜST BANNER -->
+    <div class="kp-hero-banner">
+        <div>
+            <span class="kp-hero-tag">MERKEZİ LOJİSTİK KOMUTA PANELİ</span>
+            <h2>Ulusal Dağıtım ve Canlı Filo Yönetim Merkezi</h2>
+            <p>Tüm şube çıkışlarını, sahadaki aktif kurye rotalarını ve teslimat performansını gerçek zamanlı denetleyin.</p>
+        </div>
+        <div class="kp-hero-actions">
+            <button type="button" class="kp-btn kp-btn-primary" @onclick='() => Nav.NavigateTo("/yeni")'>
+                + Yeni Sevkiyat Oluştur
+            </button>
+            <button type="button" class="kp-btn kp-btn-outline" @onclick='() => Nav.NavigateTo("/canli")'>
+                Canlı Haritayı Aç
+            </button>
+        </div>
     </div>
 
-    <!-- SOL YAN MENÜ (ENTERPRISE SIDEBAR) -->
-    <aside class="kp-sidebar no-print">
-        <div class="kp-brand">
-            <div class="kp-brand-left">
-                <div class="kp-logo-box">KP</div>
+    <!-- 4'LÜ KURUMSAL KPI KARTLARI -->
+    <div class="kp-kpi-grid">
+        <div class="kp-kpi-card kpi-blue" @onclick='() => Nav.NavigateTo("/liste/ALL")'>
+            <div class="kp-kpi-top">
+                <span>TOPLAM SEVKİYAT HACMİ</span>
+                <div class="kp-kpi-icon">📦</div>
+            </div>
+            <div class="kp-kpi-value">@_totalCount</div>
+            <div class="kp-kpi-bar"><div style="width: 100%; background:#3b82f6;"></div></div>
+            <div class="kp-kpi-foot">Tüm kayıtları incelemek için tıklayın →</div>
+        </div>
+
+        <div class="kp-kpi-card kpi-emerald" @onclick='() => Nav.NavigateTo("/liste/ACTIVE")'>
+            <div class="kp-kpi-top">
+                <span>AKTİF OPERASYONDAKİLER</span>
+                <div class="kp-kpi-icon">⚡</div>
+            </div>
+            <div class="kp-kpi-value">@_activeCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_activeCount))%; background:#10b981;"></div></div>
+            <div class="kp-kpi-foot">Operasyon oranı: %@GetPercentage(_activeCount) →</div>
+        </div>
+
+        <div class="kp-kpi-card kpi-cyan" @onclick='() => Nav.NavigateTo("/canli")'>
+            <div class="kp-kpi-top">
+                <span>SAHADA YOLA ÇIKAN (CANLI)</span>
+                <div class="kp-kpi-icon">🚚</div>
+            </div>
+            <div class="kp-kpi-value">@_inTransitCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_inTransitCount))%; background:#06b6d4;"></div></div>
+            <div class="kp-kpi-foot">Canlı GPS radarına bağlan →</div>
+        </div>
+
+        <div class="kp-kpi-card kpi-slate" @onclick='() => Nav.NavigateTo("/liste/PASSIVE")'>
+            <div class="kp-kpi-top">
+                <span>TAMAMLANAN / ARŞİV</span>
+                <div class="kp-kpi-icon">✓</div>
+            </div>
+            <div class="kp-kpi-value">@_passiveCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_passiveCount))%; background:#64748b;"></div></div>
+            <div class="kp-kpi-foot">Tamamlanma oranı: %@GetPercentage(_passiveCount) →</div>
+        </div>
+    </div>
+
+    <!-- ALT İKİLİ KURUMSAL PANELLER -->
+    <div class="kp-dash-split">
+        <!-- SOL: SON SEVKIYAT HAREKETLERİ TABLOSU -->
+        <div class="kp-card">
+            <div class="kp-card-header">
                 <div>
-                    <h1>KARGO PRO</h1>
-                    <span>KURUMSAL LOJİSTİK AĞI</span>
+                    <h3>Son Kaydedilen Sevkiyat Hareketleri</h3>
+                    <p>Sistemdeki son 5 kargo kaydının anlık operasyon özeti</p>
                 </div>
-            </div>
-
-            <!-- MOBİLDE KARGO PRO YANINDAKİ MİNİMAL SAAT VE EMOJİ BUTONU -->
-            <div class="kp-mobile-QuickBar">
-                <span class="kp-mob-clock" title="Sistem Saati">
-                    @DateTime.Now.ToString("HH:mm")
-                </span>
-
-                <button type="button" class="kp-mob-theme-icon-btn" @onclick="ToggleThemeAsync" title="Tema Değiştir">
-                    @(_isDarkMode ? "☀️" : "🌙")
+                <button type="button" class="kp-link-btn" @onclick='() => Nav.NavigateTo("/liste/ALL")'>
+                    Tümünü Gör →
                 </button>
+            </div>
+            <div class="kp-table-box">
+                <table class="kp-table">
+                    <thead>
+                        <tr>
+                            <th>Takip Kodu</th>
+                            <th>Gönderici / Alıcı</th>
+                            <th>Teslimat Bölgesi</th>
+                            <th>Statü</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _cargos.TakeLast(5).Reverse())
+                        {
+                            <tr @onclick='() => Nav.NavigateTo($"/sorgula/{item.TrackingNumber.Replace("TR-", "")}")'>
+                                <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
+                                <td>@item.SenderName → @item.ReceiverName</td>
+                                <td>@item.LastLocation</td>
+                                <td><StatusBadge Status="@item.CurrentStatus" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="kp-nav-group-title">OPERASYON MERKEZİ</div>
-        <nav class="kp-nav">
-            <button type="button" class="kp-nav-item @(_activePage == "HOME" ? "active" : "")" @onclick='async () => { NavigateTo("HOME", "Operasyon Merkezi  /  Ana Sayfa"); await LoadSummaryCountsAsync(); }'>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                <span>ANA SAYFA</span>
-            </button>
-
-            <button type="button" class="kp-nav-item @(_activePage == "ADD" ? "active" : "")" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  /  Yeni Kargo Kaydı")'>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>YENİ KARGO KAYDI</span>
-            </button>
-
-            <button type="button" class="kp-nav-item @(_activePage == "QUERY" ? "active" : "")" @onclick='() => { ResetQueryScreen(); NavigateTo("QUERY", "Operasyon Merkezi  /  Sorgula ve Düzenle"); }'>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <span>SORGULA VE DÜZENLE</span>
-            </button>
-
-            <button type="button" class="kp-nav-item @(_activePage == "LIST" ? "active" : "")" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Kargo Listeleri"); await LoadCargoListAsync("ALL"); }'>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                <span>KARGO LİSTELERİ</span>
-            </button>
-
-            <button type="button" class="kp-nav-item @(_activePage == "LIVE_MAP" ? "active" : "")" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
-                <span>CANLI KARGO TAKİBİ</span>
-                @if (_inTransitCount > 0)
+        <!-- SAĞ: SAHADAKİ CANLI KURYE FİLOSU -->
+        <div class="kp-card">
+            <div class="kp-card-header">
+                <div>
+                    <h3>Canlı Dağıtım Filosu (Yoldakiler)</h3>
+                    <p>Şu anda sahada hareket halinde olan aktif kuryeler</p>
+                </div>
+            </div>
+            <div class="kp-fleet-list">
+                @if (!_cargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
                 {
-                    <span class="kp-nav-pill">@_inTransitCount</span>
+                    <div class="kp-empty-state">
+                        Şu anda "Yola Çıktı" statüsünde sahada kurye bulunmuyor. Sorgula ve Düzenle ekranından bir kargoyu yola çıkarabilirsiniz.
+                    </div>
                 }
-            </button>
-        </nav>
-
-        <div class="kp-sidebar-bottom">
-            <div class="kp-sys-box">
-                <div class="kp-sys-row">
-                    <span>Rota Motoru</span>
-                    <strong>OSRM / Dijkstra</strong>
-                </div>
-                <div class="kp-sys-row">
-                    <span>İletişim Katmanı</span>
-                    <strong>gRPC HTTP/2</strong>
-                </div>
+                else
+                {
+                    @foreach (var activeItem in _cargos.Where(c => c.CurrentStatus == "Yola Çıktı"))
+                    {
+                        <div class="kp-fleet-item">
+                            <div class="kp-fleet-info">
+                                <div class="kp-fleet-code">
+                                    <span class="kp-pulse-dot"></span>
+                                    <strong>@activeItem.TrackingNumber</strong>
+                                </div>
+                                <div class="kp-fleet-route">@activeItem.LastLocation</div>
+                                <div class="kp-fleet-rec">Alıcı: @activeItem.ReceiverName</div>
+                            </div>
+                            <button type="button" class="kp-btn kp-btn-sm kp-btn-primary" @onclick='() => Nav.NavigateTo($"/canli/{activeItem.TrackingNumber.Replace("TR-", "")}")'>
+                                Haritada İzle →
+                            </button>
+                        </div>
+                    }
+                }
             </div>
-            <div class="kp-copyright">Kargo Pro Enterprise v3.0</div>
         </div>
-    </aside>
-
-    <!-- SAĞ ANA BÖLGE -->
-    <div class="kp-main">
-        <!-- ÜST KURUMSAL BAR -->
-        <header class="kp-topbar no-print">
-            <div class="kp-topbar-left">
-                <button type="button" class="kp-btn-back" disabled="@(_navHistory.Count == 0)" @onclick="GoBackAsync">
-                    ← Geri
-                </button>
-                <div class="kp-breadcrumb">@_breadcrumb</div>
-            </div>
-
-            <div class="kp-topbar-right">
-                <div class="kp-status-pill @(_serverOnline ? "online" : "offline")">
-                    <span class="kp-dot"></span>
-                    @(_serverOnline ? "gRPC Sunucu Aktif (5135)" : "Sunucu Bağlantısı Yok")
-                </div>
-
-                <div class="kp-clock-pill">@_clockText</div>
-
-                <button type="button" class="kp-theme-btn" @onclick="ToggleThemeAsync">
-                    @if (_isDarkMode)
-                    {
-                        <span>☀️ Gündüz Modu</span>
-                    }
-                    else
-                    {
-                        <span>🌙 Gece Modu</span>
-                    }
-                </button>
-            </div>
-        </header>
-
-        <!-- SAYFA İÇERİĞİ -->
-        <main class="kp-content">
-
-            <!-- 1. SAYFA: ANA SAYFA (KURUMSAL COMMAND CENTER) -->
-            @if (_activePage == "HOME")
-            {
-                <div class="kp-dashboard">
-                    <!-- ÜST BANNER -->
-                    <div class="kp-hero-banner">
-                        <div>
-                            <span class="kp-hero-tag">MERKEZİ LOJİSTİK KOMUTA PANELİ</span>
-                            <h2>Ulusal Dağıtım ve Canlı Filo Yönetim Merkezi</h2>
-                            <p>Tüm şube çıkışlarını, sahadaki aktif kurye rotalarını ve teslimat performansını gerçek zamanlı denetleyin.</p>
-                        </div>
-                        <div class="kp-hero-actions">
-                            <button type="button" class="kp-btn kp-btn-primary" @onclick='() => NavigateTo("ADD", "Operasyon Merkezi  /  Yeni Kargo Kaydı")'>
-                                + Yeni Sevkiyat Oluştur
-                            </button>
-                            <button type="button" class="kp-btn kp-btn-outline" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
-                                Canlı Haritayı Aç
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 4'LÜ KURUMSAL KPI KARTLARI -->
-                    <div class="kp-kpi-grid">
-                        <div class="kp-kpi-card kpi-blue" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
-                            <div class="kp-kpi-top">
-                                <span>TOPLAM SEVKİYAT HACMİ</span>
-                                <div class="kp-kpi-icon">📦</div>
-                            </div>
-                            <div class="kp-kpi-value">@_totalCount</div>
-                            <div class="kp-kpi-bar"><div style="width: 100%; background:#3b82f6;"></div></div>
-                            <div class="kp-kpi-foot">Tüm kayıtları incelemek için tıklayın →</div>
-                        </div>
-
-                        <div class="kp-kpi-card kpi-emerald" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Aktif Kargolar"); await LoadCargoListAsync("ACTIVE"); }'>
-                            <div class="kp-kpi-top">
-                                <span>AKTİF OPERASYONDAKİLER</span>
-                                <div class="kp-kpi-icon">⚡</div>
-                            </div>
-                            <div class="kp-kpi-value">@_activeCount</div>
-                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_activeCount))%; background:#10b981;"></div></div>
-                            <div class="kp-kpi-foot">Operasyon oranı: %@GetPercentage(_activeCount) →</div>
-                        </div>
-
-                        <div class="kp-kpi-card kpi-cyan" @onclick='() => { StopLiveTracking(clearMessage: true); NavigateTo("LIVE_MAP", "Operasyon Merkezi  /  Canlı Kargo Takibi"); }'>
-                            <div class="kp-kpi-top">
-                                <span>SAHADA YOLA ÇIKAN (CANLI)</span>
-                                <div class="kp-kpi-icon">🚚</div>
-                            </div>
-                            <div class="kp-kpi-value">@_inTransitCount</div>
-                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_inTransitCount))%; background:#06b6d4;"></div></div>
-                            <div class="kp-kpi-foot">Canlı GPS radarına bağlan →</div>
-                        </div>
-
-                        <div class="kp-kpi-card kpi-slate" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Pasif (Arşiv)"); await LoadCargoListAsync("PASSIVE"); }'>
-                            <div class="kp-kpi-top">
-                                <span>TAMAMLANAN / ARŞİV</span>
-                                <div class="kp-kpi-icon">✓</div>
-                            </div>
-                            <div class="kp-kpi-value">@_passiveCount</div>
-                            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_passiveCount))%; background:#64748b;"></div></div>
-                            <div class="kp-kpi-foot">Tamamlanma oranı: %@GetPercentage(_passiveCount) →</div>
-                        </div>
-                    </div>
-
-                    <!-- ALT İKİLİ KURUMSAL PANELLER -->
-                    <div class="kp-dash-split">
-                        <!-- SOL: SON SEVKIYAT HAREKETLERİ TABLOSU -->
-                        <div class="kp-card">
-                            <div class="kp-card-header">
-                                <div>
-                                    <h3>Son Kaydedilen Sevkiyat Hareketleri</h3>
-                                    <p>Sistemdeki son 5 kargo kaydının anlık operasyon özeti</p>
-                                </div>
-                                <button type="button" class="kp-link-btn" @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); }'>
-                                    Tümünü Gör →
-                                </button>
-                            </div>
-                            <div class="kp-table-box">
-                                <table class="kp-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Takip Kodu</th>
-                                            <th>Gönderici / Alıcı</th>
-                                            <th>Teslimat Bölgesi</th>
-                                            <th>Statü</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var item in _cachedCargos.TakeLast(5).Reverse())
-                                        {
-                                            <tr @onclick='async () => { NavigateTo("LIST", "Operasyon Merkezi  /  Tüm Kargolar"); await LoadCargoListAsync("ALL"); SelectCargoForPreview(item); }'>
-                                                <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
-                                                <td>@item.SenderName → @item.ReceiverName</td>
-                                                <td>@item.LastLocation</td>
-                                                <td>
-                                                    <span class="kp-badge @GetBadgeClass(item.CurrentStatus)">
-                                                        ● @item.CurrentStatus
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- SAĞ: SAHADAKİ CANLI KURYE FİLOSU -->
-                        <div class="kp-card">
-                            <div class="kp-card-header">
-                                <div>
-                                    <h3>Canlı Dağıtım Filosu (Yoldakiler)</h3>
-                                    <p>Şu anda sahada hareket halinde olan aktif kuryeler</p>
-                                </div>
-                            </div>
-                            <div class="kp-fleet-list">
-                                @if (!_cachedCargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
-                                {
-                                    <div class="kp-empty-state">
-                                        Şu anda "Yola Çıktı" statüsünde sahada kurye bulunmuyor. Sorgula ve Düzenle ekranından bir kargoyu yola çıkarabilirsiniz.
-                                    </div>
-                                }
-                                else
-                                {
-                                    @foreach (var activeItem in _cachedCargos.Where(c => c.CurrentStatus == "Yola Çıktı"))
-                                    {
-                                        <div class="kp-fleet-item">
-                                            <div class="kp-fleet-info">
-                                                <div class="kp-fleet-code">
-                                                    <span class="kp-pulse-dot"></span>
-                                                    <strong>@activeItem.TrackingNumber</strong>
-                                                </div>
-                                                <div class="kp-fleet-route">@activeItem.LastLocation</div>
-                                                <div class="kp-fleet-rec">Alıcı: @activeItem.ReceiverName</div>
-                                            </div>
-                                            <button type="button" class="kp-btn kp-btn-sm kp-btn-primary" @onclick="() => JumpToLiveMapAsync(activeItem.TrackingNumber)">
-                                                Haritada İzle →
-                                            </button>
-                                        </div>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-
-            <!-- 2. SAYFA: YENİ KARGO KAYDI -->
-            @if (_activePage == "ADD")
-            {
-                <div class="kp-form-container">
-                    <div class="kp-card">
-                        <div class="kp-card-header">
-                            <div>
-                                <h3>Yeni Kurumsal Kargo Sevkiyat Kaydı</h3>
-                                <p>Gönderici, alıcı ve kilitli il/ilçe teslimat bilgilerini eksiksiz giriniz.</p>
-                            </div>
-                        </div>
-
-                        <div class="kp-card-body">
-                            <div class="kp-grid-2">
-                                <div class="kp-field">
-                                    <label>Gönderici Adı Soyadı / Kurum</label>
-                                    <input type="text" class="kp-input" @bind="_newSender" />
-                                </div>
-
-                                <div class="kp-field">
-                                    <label>Alıcı Adı Soyadı</label>
-                                    <input type="text" class="kp-input" @bind="_newReceiver" />
-                                </div>
-                            </div>
-
-                            <div class="kp-grid-2">
-                                <div class="kp-field">
-                                    <label>Teslimat İli</label>
-                                    <select class="kp-input" value="@_newCity" @onchange="OnNewCityChanged">
-                                        <option value="">-- İl Seçiniz --</option>
-                                        @foreach (var prov in _provinces)
-                                        {
-                                            <option value="@prov.Name">@prov.Name</option>
-                                        }
-                                    </select>
-                                </div>
-
-                                <div class="kp-field">
-                                    <label>Teslimat İlçesi</label>
-                                    <select class="kp-input" @bind="_newDistrict" disabled="@(string.IsNullOrEmpty(_newCity))">
-                                        <option value="">-- İlçe Seçiniz --</option>
-                                        @foreach (var dist in GetDistrictsForCity(_newCity))
-                                        {
-                                            <option value="@dist">@dist</option>
-                                        }
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="kp-field">
-                                <label>Mahalle, Cadde, Sokak ve Kapı Numarası</label>
-                                <input type="text" class="kp-input" @bind="_newStreetDetail" />
-                            </div>
-
-                            <div class="kp-field">
-                                <label>Tahmini Teslim Tarihi</label>
-                                <input type="date" class="kp-input" @bind="_newDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-                            </div>
-
-                            <button type="button" class="kp-btn kp-btn-success kp-btn-block" @onclick="CreateCargoAsync">
-                                SEVKİYATI SİSTEME KAYDET VE BARKOD ÜRET
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            }
-
-            <!-- 3. SAYFA: SORGULA VE DÜZENLE -->
-            @if (_activePage == "QUERY")
-            {
-                <div class="kp-form-container" style="max-width: 780px;">
-                    <div class="kp-card" style="margin-bottom: 20px;">
-                        <div class="kp-card-header">
-                            <div>
-                                <h3>Kargo Sorgulama ve Operasyon Güncelleme</h3>
-                                <p>4 haneli takip numarasını girerek kaydı çağırabilir ve durumunu değiştirebilirsiniz.</p>
-                            </div>
-                        </div>
-                        <div class="kp-card-body">
-                            <div class="kp-search-strip">
-                                <span class="kp-prefix">TR -</span>
-                                <input type="text"
-                                       class="kp-code-input"
-                                       maxlength="4"
-                                       value="@_trackingDigits"
-                                       @oninput="OnTrackingCodeInput"
-                                       @onkeydown="OnTrackingCodeKeyDown" />
-                                <button type="button" class="kp-btn kp-btn-primary" @onclick="SearchCargoByCodeAsync">
-                                    KAYDI SORGULA
-                                </button>
-                            </div>
-
-                            @if (!string.IsNullOrEmpty(_queryFeedback))
-                            {
-                                <div class="kp-alert @(_querySuccess ? "kp-alert-ok" : "kp-alert-err")">
-                                    @_queryFeedback
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    @if (_showDetailEditCard)
-                    {
-                        <div class="kp-card">
-                            <div class="kp-card-header">
-                                <div>
-                                    <h3>Kayıt Detayları: @_editTrackingNo</h3>
-                                    <p>Statü: @(_editIsActive ? "AKTİF OPERASYON KAYDI" : "PASİF (ARŞİVLENMİŞ) KAYIT")</p>
-                                </div>
-                                <span class="kp-badge @GetBadgeClass(_editStatus)">● @_editStatus</span>
-                            </div>
-
-                            <div class="kp-card-body">
-                                <div class="kp-grid-2">
-                                    <div class="kp-field">
-                                        <label>Gönderici Adı Soyadı</label>
-                                        <input type="text" class="kp-input" @bind="_editSender" />
-                                    </div>
-                                    <div class="kp-field">
-                                        <label>Alıcı Adı Soyadı</label>
-                                        <input type="text" class="kp-input" @bind="_editReceiver" />
-                                    </div>
-                                </div>
-
-                                <div class="kp-grid-2">
-                                    <div class="kp-field">
-                                        <label>Teslimat İli</label>
-                                        <select class="kp-input" value="@_editCity" @onchange="OnEditCityChanged">
-                                            <option value="">-- İl Seçiniz --</option>
-                                            @foreach (var prov in _provinces)
-                                            {
-                                                <option value="@prov.Name">@prov.Name</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="kp-field">
-                                        <label>Teslimat İlçesi</label>
-                                        <select class="kp-input" @bind="_editDistrict" disabled="@(string.IsNullOrEmpty(_editCity))">
-                                            <option value="">-- İlçe Seçiniz --</option>
-                                            @foreach (var dist in GetDistrictsForCity(_editCity))
-                                            {
-                                                <option value="@dist">@dist</option>
-                                            }
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="kp-field">
-                                    <label>Mahalle, Cadde, Sokak ve Kapı Numarası</label>
-                                    <input type="text" class="kp-input" @bind="_editStreetDetail" />
-                                </div>
-
-                                <div class="kp-grid-2">
-                                    <div class="kp-field">
-                                        <label>Tahmini Teslim Tarihi</label>
-                                        <input type="date" class="kp-input" @bind="_editDeliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-                                    </div>
-                                    <div class="kp-field">
-                                        <label>Operasyon Durumu</label>
-                                        <select class="kp-input" @bind="_editStatus">
-                                            <option value="Hazırlanıyor">Hazırlanıyor</option>
-                                            <option value="Yola Çıktı">Yola Çıktı</option>
-                                            <option value="Teslim Edildi">Teslim Edildi</option>
-                                            <option value="İptal Edildi">İptal Edildi</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <button type="button" class="kp-btn kp-btn-warning kp-btn-block" @onclick="SaveEditedCargoAsync">
-                                    DEĞİŞİKLİKLERİ VE OPERASYON DURUMUNU KAYDET
-                                </button>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-
-            <!-- 4. SAYFA: KARGO LİSTELERİ -->
-            @if (_activePage == "LIST")
-            {
-                <div class="kp-list-page">
-                    <div class="kp-toolbar no-print">
-                        <div class="kp-tabs">
-                            <button type="button" class="kp-tab @(_currentFilter == "ALL" ? "active" : "")" @onclick='() => LoadCargoListAsync("ALL")'>
-                                TÜM KARGOLAR (@_totalCount)
-                            </button>
-                            <button type="button" class="kp-tab @(_currentFilter == "ACTIVE" ? "active" : "")" @onclick='() => LoadCargoListAsync("ACTIVE")'>
-                                AKTİF OPERASYON (@_activeCount)
-                            </button>
-                            <button type="button" class="kp-tab @(_currentFilter == "PASSIVE" ? "active" : "")" @onclick='() => LoadCargoListAsync("PASSIVE")'>
-                                ARŞİV (@_passiveCount)
-                            </button>
-                        </div>
-
-                        <div class="kp-toolbar-right">
-                            <input type="text" class="kp-input kp-search-input" @bind="_liveSearch" @bind:event="oninput" placeholder="Takip kodu, alıcı veya şehir ara..." />
-                            <button type="button" class="kp-btn kp-btn-sm kp-btn-success" @onclick="ExportFilteredListToExcelAsync">Excel (CSV)</button>
-                            <button type="button" class="kp-btn kp-btn-sm kp-btn-danger" @onclick="ExportToPdfAsync">PDF Yazdır</button>
-                        </div>
-                    </div>
-
-                    <div class="kp-list-layout">
-                        <div class="kp-card kp-table-card">
-                            <table class="kp-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 110px;">Takip No</th>
-                                        <th style="width: 150px;">Gönderici</th>
-                                        <th style="width: 150px;">Alıcı</th>
-                                        <th style="width: 140px;">Operasyon Durumu</th>
-                                        <th>Teslimat Adresi</th>
-                                        <th style="width: 115px;">Teslim Tarihi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @if (!FilteredCargos.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="6" style="text-align:center; padding: 40px;">Arama kriterlerine uygun kargo kaydı bulunamadı.</td>
-                                        </tr>
-                                    }
-                                    @foreach (var item in FilteredCargos)
-                                    {
-                                        <tr class="@(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "kp-row-selected" : "")"
-                                            @onclick="() => SelectCargoForPreview(item)">
-                                            <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
-                                            <td>@item.SenderName</td>
-                                            <td>@item.ReceiverName</td>
-                                            <td>
-                                                <span class="kp-badge @GetBadgeClass(item.CurrentStatus)">
-                                                    ● @item.CurrentStatus
-                                                </span>
-                                            </td>
-                                            <td>@item.LastLocation</td>
-                                            <td>@item.EstimatedDelivery</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- SAĞ DETAY DENETÇİSİ -->
-                        <div class="kp-card kp-inspector no-print">
-                            <div class="kp-inspector-head">SEVKİYAT DENETİM KARTI</div>
-                            @if (_selectedCargo != null)
-                            {
-                                <div class="kp-inspector-body">
-                                    <div class="kp-ins-code">@_selectedCargo.TrackingNumber</div>
-                                    <span class="kp-badge @GetBadgeClass(_selectedCargo.CurrentStatus)" style="align-self:flex-start; margin-bottom:12px;">
-                                        ● @_selectedCargo.CurrentStatus
-                                    </span>
-
-                                    <button type="button" class="kp-btn kp-btn-outline kp-btn-sm kp-btn-block" @onclick="CopySelectedTrackNoAsync">
-                                        @(_copiedJustNow ? "✓ PANOYA KOPYALANDI" : "BARKOD KODUNU KOPYALA")
-                                    </button>
-
-                                    <div class="kp-divider"></div>
-
-                                    <div class="kp-ins-row"><span>GÖNDERİCİ</span><strong>@_selectedCargo.SenderName</strong></div>
-                                    <div class="kp-ins-row"><span>ALICI</span><strong>@_selectedCargo.ReceiverName</strong></div>
-                                    <div class="kp-ins-row"><span>TESLİMAT ADRESİ</span><strong>@_selectedCargo.LastLocation</strong></div>
-                                    <div class="kp-ins-row"><span>TAHMİNİ TESLİM</span><strong>@_selectedCargo.EstimatedDelivery</strong></div>
-                                    <div class="kp-ins-row"><span>KAYIT SINIFI</span><strong>@(_selectedCargo.IsActive ? "Aktif Operasyon" : "Pasif Arşiv")</strong></div>
-
-                                    <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-                                        @if (_selectedCargo.CurrentStatus == "Yola Çıktı")
-                                        {
-                                            <button type="button" class="kp-btn kp-btn-primary kp-btn-block" @onclick="() => JumpToLiveMapAsync(_selectedCargo.TrackingNumber)">
-                                                CANLI HARİTADA İZLE →
-                                            </button>
-                                        }
-                                        <button type="button" class="kp-btn kp-btn-warning kp-btn-block" @onclick="OpenSelectedCargoInEditAsync">
-                                            KAYDI DÜZENLE →
-                                        </button>
-                                    </div>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="kp-empty-state">Detayları incelemek için tablodan bir sevkiyat seçiniz.</div>
-                            }
-                        </div>
-                    </div>
-                </div>
-            }
-
-            <!-- 5. SAYFA: CANLI HARİTA VE KURYE TAKİBİ -->
-            @if (_activePage == "LIVE_MAP")
-            {
-                <div class="kp-map-page">
-                    <div class="kp-card" style="margin-bottom: 18px;">
-                        <div class="kp-card-header">
-                            <div>
-                                <h3>Gerçek Zamanlı GPS Telemetri ve Rota Takibi</h3>
-                                <p>Yola çıkan tüm kargolar arka planda eşzamanlı ilerler. Kod girerek veya aşağıdaki aktif butonlara tıklayarak bağlanın.</p>
-                            </div>
-                        </div>
-                        <div class="kp-card-body">
-                            <div class="kp-search-strip">
-                                <span class="kp-prefix">TR -</span>
-                                <input type="text"
-                                       class="kp-code-input"
-                                       maxlength="4"
-                                       value="@_liveMapDigits"
-                                       @oninput="OnLiveMapInput"
-                                       @onkeydown="OnLiveMapKeyDown" />
-                                <button type="button" class="kp-btn kp-btn-primary" @onclick="StartLiveTrackingAsync">
-                                    CANLI KONUMA BAĞLAN
-                                </button>
-                                @if (_isStreamRunning)
-                                {
-                                    <button type="button" class="kp-btn kp-btn-danger" @onclick="() => StopLiveTracking(clearMessage: false)">
-                                        AKIŞI DURDUR
-                                    </button>
-                                }
-                            </div>
-
-                            <!-- YOLA ÇIKMIŞ KARGOLAR İÇİN HIZLI SEÇİM ÇUBUĞU -->
-                            @if (_cachedCargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
-                            {
-                                <div class="kp-quick-chips">
-                                    <span>Sahadaki Aktif Kuryeler (Hızlı Geçiş):</span>
-                                    @foreach (var c in _cachedCargos.Where(x => x.CurrentStatus == "Yola Çıktı"))
-                                    {
-                                        <button type="button" class="kp-chip" @onclick="() => JumpToLiveMapAsync(c.TrackingNumber)">
-                                            🚚 @c.TrackingNumber (@c.LastLocation.Split('-')[0])
-                                        </button>
-                                    }
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrEmpty(_liveMapFeedback))
-                            {
-                                <div class="kp-alert @(_liveMapSuccess ? "kp-alert-ok" : "kp-alert-err")" style="margin-top:14px;">
-                                    @_liveMapFeedback
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    @if (_isMapVisible)
-                    {
-                        <div class="kp-telemetry-bar">
-                            <div class="kp-tel-left">
-                                <span class="kp-pulse-dot"></span>
-                                <strong>@_courierName</strong>
-                            </div>
-                            <div class="kp-tel-right">@_liveStepMessage</div>
-                        </div>
-
-                        <div id="cargoMapBox" class="kp-map-canvas"></div>
-                    }
-                </div>
-            }
-
-        </main>
     </div>
 </div>
+
+@code {
+    private List<CargoStatusResponse> _cargos = new();
+    private int _totalCount;
+    private int _activeCount;
+    private int _passiveCount;
+    private int _inTransitCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UiState.SetBreadcrumb("Operasyon Merkezi  /  Ana Sayfa");
+        await RefreshDashboardAsync();
+    }
+
+    private async Task RefreshDashboardAsync()
+    {
+        _cargos = await Api.GetAllCargosSafeAsync();
+        _totalCount = _cargos.Count;
+        _activeCount = _cargos.Count(c => c.IsActive);
+        _passiveCount = _cargos.Count(c => !c.IsActive);
+        _inTransitCount = _cargos.Count(c => c.CurrentStatus == "Yola Çıktı");
+
+        UiState.UpdateMetrics(_inTransitCount, Api.IsServerOnline);
+    }
+
+    private int GetPercentage(int part) => _totalCount == 0 ? 0 : (int)Math.Round((double)part / _totalCount * 100);
+}

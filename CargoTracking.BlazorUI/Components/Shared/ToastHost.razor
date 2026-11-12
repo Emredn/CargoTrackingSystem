@@ -1,0 +1,21 @@
+﻿@using CargoTracking.BlazorUI.Services
+@implements IDisposable
+@inject UiStateService UiState
+
+<div class="kp-toast-stack no-print">
+    @foreach (var toast in UiState.Toasts)
+    {
+        <div class="kp-toast @(toast.IsSuccess ? "kp-toast-ok" : "kp-toast-err")">
+            <div class="kp-toast-indicator"></div>
+            <div class="kp-toast-content">
+                <strong>@(toast.IsSuccess ? "OPERASYON ONAYI" : "SİSTEM UYARISI")</strong>
+                <span>@toast.Message</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => UiState.OnChange += StateHasChanged;
+    public void Dispose() => UiState.OnChange -= StateHasChanged;
+}

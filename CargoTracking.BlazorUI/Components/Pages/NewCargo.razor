@@ -1,0 +1,102 @@
+﻿@page "/yeni"
+@using CargoTracking.Grpc
+@inject CargoApiClient Api
+@inject UiStateService UiState
+
+<PageTitle>KARGO PRO | Yeni Kargo Kaydı</PageTitle>
+
+<div class="kp-form-container">
+    <div class="kp-card">
+        <div class="kp-card-header">
+            <div>
+                <h3>Yeni Kurumsal Kargo Sevkiyat Kaydı</h3>
+                <p>Gönderici, alıcı ve kilitli il/ilçe teslimat bilgilerini eksiksiz giriniz.</p>
+            </div>
+        </div>
+
+        <div class="kp-card-body">
+            <div class="kp-grid-2">
+                <div class="kp-field">
+                    <label>Gönderici Adı Soyadı / Kurum</label>
+                    <input type="text" class="kp-input" @bind="_sender" />
+                </div>
+
+                <div class="kp-field">
+                    <label>Alıcı Adı Soyadı</label>
+                    <input type="text" class="kp-input" @bind="_receiver" />
+                </div>
+            </div>
+
+            <!-- ORTAK İL / İLÇE / AÇIK ADRES BİLEŞENİ -->
+            <AddressPicker @bind-City="_city" @bind-District="_district" @bind-Neighborhood="_neighborhood" @bind-StreetDetail="_streetDetail" />
+            <div class="kp-field">
+                <label>Tahmini Teslim Tarihi</label>
+                <input type="date" class="kp-input" @bind="_deliveryDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <button type="button" class="kp-btn kp-btn-success kp-btn-block" @onclick="CreateCargoAsync">
+                SEVKİYATI SİSTEME KAYDET VE BARKOD ÜRET
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _sender = "";
+    private string _receiver = "";
+    private string _city = "";
+    private string _district = "";
+    private string _streetDetail = "";
+    private DateTime _deliveryDate = DateTime.Today;
+    private string _neighborhood = "";
+    protected override void OnInitialized()
+    {
+        UiState.SetBreadcrumb("Operasyon Merkezi  /  Yeni Kargo Kaydı");
+    }
+
+    private async Task CreateCargoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_sender) || string.IsNullOrWhiteSpace(_receiver))
+        {
+            await UiState.ShowToastAsync("Gönderici ve alıcı bilgisi zorunludur.", false);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_city) || string.IsNullOrWhiteSpace(_district) || string.IsNullOrWhiteSpace(_neighborhood) || string.IsNullOrWhiteSpace(_streetDetail))
+        {
+            await UiState.ShowToastAsync("İl, ilçe, mahalle ve açık adres eksiksiz girilmelidir.", false);
+            return;
+        }
+
+        string structuredAddress = $"{_city.Trim()} / {_district.Trim()} / {_neighborhood.Trim()} - {_streetDetail.Trim()}";
+
+        try
+        {
+            var response = await Api.Client.CreateCargoAsync(new CreateCargoRequest
+            {
+                SenderName = _sender.Trim(),
+                ReceiverName = _receiver.Trim(),
+                LastLocation = structuredAddress,
+                EstimatedDelivery = _deliveryDate.ToString("dd.MM.yyyy")
+            });
+
+            if (response.Success)
+            {
+                await UiState.ShowToastAsync($"Sevkiyat Oluşturuldu! Barkod: {response.GeneratedTrackingNumber}", true);
+                _sender = "";
+                _receiver = "";
+                _city = "";
+                _district = "";
+                _streetDetail = "";
+                _deliveryDate = DateTime.Today;
+
+                var all = await Api.GetAllCargosSafeAsync();
+                UiState.UpdateMetrics(all.Count(c => c.CurrentStatus == "Yola Çıktı"), Api.IsServerOnline);
+            }
+        }
+        catch (Exception ex)
+        {
+            await UiState.ShowToastAsync($"Sunucu hatası: {ex.Message}", false);
+        }
+    }
+}
