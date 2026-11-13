@@ -2,8 +2,16 @@
 @using CargoTracking.BlazorUI.Services
 @implements IDisposable
 @inject UiStateService UiState
-@inject CargoApiClient Api
 @inject IJSRuntime JSRuntime
+
+@*
+    ANA ŞABLON (LAYOUT)
+    Bütün sayfaların içinde gösterildiği ortak çerçeve: sol menü (Sidebar), üst bar
+    (geri butonu, ekmek kırıntısı, sunucu durumu, saat, tema butonu) ve bildirim kutusu.
+    Sayfanın kendi içeriği @Body yerine yerleşir.
+    Ayrıca arka planda her 3 saniyede bir kargo listesini yeniler; menüdeki canlı rozet,
+    "teslim edildi" bildirimleri ve sunucu durumu bu sayede güncel kalır.
+*@
 
 <div class="kp-app @(UiState.IsDarkMode ? "kp-dark" : "kp-light")">
 
@@ -26,7 +34,7 @@
             <div class="kp-topbar-right">
                 <div class="kp-status-pill @(UiState.ServerOnline ? "online" : "offline")">
                     <span class="kp-dot"></span>
-                    @(UiState.ServerOnline ? "gRPC Sunucu Aktif (5135)" : "Sunucu Bağlantısı Yok")
+                    @(UiState.ServerOnline ? "gRPC Sunucu Aktif" : "Sunucu Bağlantısı Yok")
                 </div>
 
                 <Clock Minimal="false" />
@@ -63,8 +71,7 @@
     private async Task RunBackgroundSyncLoopAsync()
     {
         // İlk açılışta hemen çek
-        var initialList = await Api.GetAllCargosSafeAsync();
-        await InvokeAsync(() => UiState.SyncCargosAsync(initialList, Api.IsServerOnline));
+        await InvokeAsync(async () => await UiState.RefreshCargosAsync());
 
         // Sonra her 3 saniyede bir arka planda sessizce senkronize et
         _bgTimer = new PeriodicTimer(TimeSpan.FromSeconds(3));
@@ -72,8 +79,7 @@
         {
             while (await _bgTimer.WaitForNextTickAsync(_cts.Token))
             {
-                var list = await Api.GetAllCargosSafeAsync();
-                await InvokeAsync(() => UiState.SyncCargosAsync(list, Api.IsServerOnline));
+                await InvokeAsync(async () => await UiState.RefreshCargosAsync());
             }
         }
         catch (OperationCanceledException) { }

@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CargoTracking.Server.Repositories
 {
+    /// <summary>
+    /// SQLite veritabanı bağlantısı (Entity Framework Core). Dosya: cargos_enterprise.db (sunucunun çalıştığı klasörde).
+    /// </summary>
     public class CargoDbContext : DbContext
     {
         public DbSet<CargoRecord> Cargos { get; set; } = null!;
@@ -15,7 +18,8 @@ namespace CargoTracking.Server.Repositories
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Başlangıç (Seed) Verileri: Veritabanı ilk kez oluştuğunda tabloya otomatik eklenecek kayıtlar
+            // Başlangıç (Seed) Verileri: Veritabanı ilk kez oluştuğunda tabloya otomatik eklenecek kayıtlar.
+            // Adres formatı: "İl / İlçe / Mahalle - Cadde/Sokak" (mevcut veritabanı dosyasını etkilemez)
             modelBuilder.Entity<CargoRecord>().HasData(
                 new CargoRecord
                 {
@@ -23,7 +27,7 @@ namespace CargoTracking.Server.Repositories
                     SenderName = "Emre Dindar",
                     ReceiverName = "Ceyda Gülmez",
                     CurrentStatus = "Yola Çıktı",
-                    LastLocation = "Bursa / Nilüfer Şubesi",
+                    LastLocation = "Bursa / Nilüfer / Özlüce - Uludağ Üniversitesi",
                     EstimatedDelivery = "17.11.2026",
                     IsActive = true
                 },
@@ -33,7 +37,7 @@ namespace CargoTracking.Server.Repositories
                     SenderName = "Trendyol Lojistik",
                     ReceiverName = "Fatih Şahinbaş",
                     CurrentStatus = "Hazırlanıyor",
-                    LastLocation = "Bursa / Hasanağa",
+                    LastLocation = "Bursa / Osmangazi / Hasanağa - Atatürk Caddesi",
                     EstimatedDelivery = "29.10.2026",
                     IsActive = true
                 }

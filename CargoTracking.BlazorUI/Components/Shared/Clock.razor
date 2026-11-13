@@ -1,5 +1,11 @@
 ﻿@implements IDisposable
 
+@*
+    SAAT (BİLEŞEN)
+    Her saniye kendini yeniler. Sadece bu küçük bileşen yenilendiği için sayfanın geri kalanı etkilenmez.
+    Minimal=true: mobil görünümde sadece "SS:dd", normalde tam tarih ve saniyeli saat.
+*@
+
 @if (Minimal)
 {
     <span class="kp-mob-clock" title="Sistem Saati">@_now.ToString("HH:mm")</span>

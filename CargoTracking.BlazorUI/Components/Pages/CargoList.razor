@@ -3,10 +3,16 @@
 @using CargoTracking.Grpc
 @using System.Text
 @implements IDisposable
-@inject CargoApiClient Api
 @inject UiStateService UiState
 @inject NavigationManager Nav
 @inject IJSRuntime JSRuntime
+
+@*
+    KARGO LİSTELERİ ( /liste  ve  /liste/{ALL|ACTIVE|PASSIVE} )
+    Bütün kargoları tablo halinde gösterir: Tümü / Aktif operasyon / Arşiv sekmeleri, canlı arama,
+    seçilen kargonun detay kartı (barkod kopyalama, canlı haritada izleme, düzenleme),
+    Excel (CSV) olarak indirme ve PDF yazdırma.
+*@
 
 <PageTitle>KARGO PRO | Kargo Listeleri</PageTitle>
 
@@ -45,13 +51,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (!FilteredCargos.Any())
+                    @{ var rows = FilteredCargos.ToList(); }
+                    @if (rows.Count == 0)
                     {
                         <tr>
                             <td colspan="6" style="text-align:center; padding: 40px;">Arama kriterlerine uygun kargo kaydı bulunamadı.</td>
                         </tr>
                     }
-                    @foreach (var item in FilteredCargos)
+                    @foreach (var item in rows)
                     {
                         <tr class="@(_selectedCargo?.TrackingNumber == item.TrackingNumber ? "kp-row-selected" : "")"
                             @onclick="() => SelectCargoForPreview(item)">
@@ -131,25 +138,21 @@
         _currentFilter = string.IsNullOrWhiteSpace(Filter) ? "ALL" : Filter.ToUpperInvariant();
         UiState.SetBreadcrumb("Operasyon Merkezi  /  Kargo Listeleri");
 
-        _cargos = await Api.GetAllCargosSafeAsync();
-        await UiState.SyncCargosAsync(_cargos, Api.IsServerOnline);
+        _cargos = await UiState.RefreshCargosAsync();
         _selectedCargo = FilteredCargos.FirstOrDefault();
     }
 
     private void OnUiStateUpdated()
     {
-        if (UiState.CachedCargos.Any())
-        {
-            _cargos = UiState.CachedCargos;
+        _cargos = UiState.CachedCargos;
 
-            // Seçili olan kargonun güncel halini (örneğin Teslim Edildi bilgisini) sağ karta da yansıt
-            if (_selectedCargo != null)
-            {
-                _selectedCargo = _cargos.FirstOrDefault(c => c.TrackingNumber == _selectedCargo.TrackingNumber)
-                                 ?? FilteredCargos.FirstOrDefault();
-            }
-            InvokeAsync(StateHasChanged);
+        // Seçili olan kargonun güncel halini (örneğin Teslim Edildi bilgisini) sağ karta da yansıt
+        if (_selectedCargo != null)
+        {
+            _selectedCargo = _cargos.FirstOrDefault(c => c.TrackingNumber == _selectedCargo.TrackingNumber)
+                             ?? FilteredCargos.FirstOrDefault();
         }
+        InvokeAsync(StateHasChanged);
     }
 
     private void SetFilter(string mode)
@@ -204,7 +207,8 @@
         sb.AppendLine("Takip No;Gönderici;Alıcı;Güncel Durum;Teslimat Adresi;Teslim Tarihi");
         foreach (var item in list)
         {
-            sb.AppendLine($"{item.TrackingNumber};{item.SenderName};{item.ReceiverName};{item.CurrentStatus};{item.LastLocation};{item.EstimatedDelivery}");
+            var cells = new[] { item.TrackingNumber, item.SenderName, item.ReceiverName, item.CurrentStatus, item.LastLocation, item.EstimatedDelivery };
+            sb.AppendLine(string.Join(";", cells.Select(CsvEscape)));
         }
 
         var utf8WithBom = new UTF8Encoding(true);
@@ -212,17 +216,17 @@
         var base64 = Convert.ToBase64String(bytes);
 
         string fileName = $"KargoPro_Rapor_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("eval", $@"
-            (() => {{
-                const link = document.createElement('a');
-                link.download = '{fileName}';
-                link.href = 'data:text/csv;charset=utf-8;base64,{base64}';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }})()
-        ");
+        await JSRuntime.InvokeVoidAsync("kpDownloadFile", fileName, base64, "text/csv;charset=utf-8");
         await UiState.ShowToastAsync("Excel (CSV) raporu indirildi.", true);
+    }
+
+    // Noktalı virgül, tırnak veya satır sonu içeren hücreleri tırnak içine alır (CSV bozulmasın)
+    private static string CsvEscape(string? value)
+    {
+        value ??= "";
+        if (value.IndexOfAny(new[] { ';', '"', '\n', '\r' }) >= 0)
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        return value;
     }
 
     private async Task ExportToPdfAsync()

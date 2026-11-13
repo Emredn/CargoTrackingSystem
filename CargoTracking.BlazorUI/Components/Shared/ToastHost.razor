@@ -2,6 +2,12 @@
 @implements IDisposable
 @inject UiStateService UiState
 
+@*
+    BİLDİRİM KUTUSU (BİLEŞEN)
+    Sağ üstte geçici bildirimleri (başarı / uyarı) listeler. Bildirimler UiStateService.ShowToastAsync ile eklenir,
+    4 saniye sonra kendiliğinden kalkar. MainLayout içinde bir kez yer alır.
+*@
+
 <div class="kp-toast-stack no-print">
     @foreach (var toast in UiState.Toasts)
     {

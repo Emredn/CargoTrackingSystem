@@ -6,6 +6,13 @@
 @inject LocationService LocService
 @inject UiStateService UiState
 
+@*
+    SORGULA VE DÜZENLE ( /sorgula  ve  /sorgula/{takipNo} )
+    4 haneli takip koduyla kargoyu bulur; gönderici, alıcı, adres, tarih ve operasyon durumunu
+    (Hazırlanıyor / Yola Çıktı / Teslim Edildi / İptal Edildi) güncellemeye yarar.
+    Kargo "Hazırlanıyor" aşamasından çıktıysa adres ve alıcı bilgileri kilitlenir, yalnızca durum değiştirilebilir.
+*@
+
 <PageTitle>KARGO PRO | Sorgula ve Düzenle</PageTitle>
 
 <div class="kp-form-container" style="max-width: 780px;">
@@ -210,17 +217,19 @@
             return;
         }
 
+        // Adres kilitli değilse il / ilçe / mahalle / sokak eksiksiz olmalı (eski kayıtlarda bazıları boş gelebilir)
+        if (!IsAddressLocked &&
+            (string.IsNullOrWhiteSpace(_editCity) || string.IsNullOrWhiteSpace(_editDistrict) ||
+             string.IsNullOrWhiteSpace(_editNeighborhood) || string.IsNullOrWhiteSpace(_editStreetDetail)))
+        {
+            await UiState.ShowToastAsync("İl, ilçe, mahalle ve cadde/sokak adı eksiksiz seçilmelidir.", false);
+            return;
+        }
+
         // Eğer adres kilitliyse mevcut adresi hiç bozmadan koru, değilse yeni seçilen adresi paketle
-        string structuredAddress;
-        if (IsAddressLocked)
-        {
-            structuredAddress = _originalRawLocation;
-        }
-        else
-        {
-            string nhPart = string.IsNullOrWhiteSpace(_editNeighborhood) ? "" : $" / {_editNeighborhood.Trim()}";
-            structuredAddress = $"{_editCity.Trim()} / {_editDistrict.Trim()}{nhPart} - {_editStreetDetail.Trim()}";
-        }
+        string structuredAddress = IsAddressLocked
+            ? _originalRawLocation
+            : $"{_editCity.Trim()} / {_editDistrict.Trim()} / {_editNeighborhood.Trim()} - {_editStreetDetail.Trim()}";
 
         try
         {
@@ -240,8 +249,7 @@
                 _trackingDigits = "";
                 await UiState.ShowToastAsync($"{_editTrackingNo} kaydı ve durumu güncellendi.", true);
 
-                var all = await Api.GetAllCargosSafeAsync();
-                UiState.UpdateMetrics(all.Count(c => c.CurrentStatus == "Yola Çıktı"), Api.IsServerOnline);
+                await UiState.RefreshCargosAsync();
             }
         }
         catch (Exception ex)

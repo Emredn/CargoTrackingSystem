@@ -1,4 +1,10 @@
-﻿<span class="kp-badge @GetBadgeClass(Status)" style="@Style">
+﻿@*
+    DURUM ROZETİ (BİLEŞEN)
+    Kargo durumunu renkli etiket olarak gösterir (Hazırlanıyor / Yola Çıktı / Teslim Edildi / İptal Edildi).
+    Kullanım: <StatusBadge Status="@kargo.CurrentStatus" />
+*@
+
+<span class="kp-badge @GetBadgeClass(Status)" style="@Style">
     ● @Status
 </span>
 

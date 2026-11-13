@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CargoTracking.Server.Repositories
 {
+    /// <summary>
+    /// Kargo kayıtlarının veritabanı işlemleri (ekle / sorgula / listele / güncelle).
+    /// Her çağrıda kısa ömürlü bir CargoDbContext açar.
+    /// </summary>
     public class CargoRepository
     {
         public CargoRepository()

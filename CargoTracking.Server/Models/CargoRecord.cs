@@ -2,6 +2,10 @@
 
 namespace CargoTracking.Server.Models
 {
+    /// <summary>
+    /// Veritabanındaki tek bir kargo kaydı.
+    /// LastLocation tek metin olarak tutulur: "İl / İlçe / Mahalle - Cadde/Sokak"
+    /// </summary>
     public class CargoRecord
     {
         [Key] // SQLite tablosundaki Primary Key (Birincil Anahtar)

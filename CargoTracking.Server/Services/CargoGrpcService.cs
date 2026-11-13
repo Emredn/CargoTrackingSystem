@@ -1,41 +1,38 @@
-﻿using CargoTracking.Grpc;
+using CargoTracking.Grpc;
+using CargoTracking.Server.Models;
 using CargoTracking.Server.Repositories;
 using Grpc.Core;
 
 namespace CargoTracking.Server.Services
 {
+    /// <summary>
+    /// gRPC uç noktaları: BlazorUI'ın sunucuyla konuştuğu yer (kargo sorgula / oluştur / listele / güncelle / canlı konum akışı).
+    /// Okuma istekleri (GetCargoStatus, GetAllCargos) sadece veritabanını okur; simülasyonları
+    /// SimulationBackgroundService yürütür.
+    /// </summary>
     public class CargoGrpcService : CargoService.CargoServiceBase
     {
         private readonly CargoRepository _repository;
         private readonly DeliverySimulationManager _simManager;
+        private readonly ILogger<CargoGrpcService> _logger;
 
-        public CargoGrpcService(CargoRepository repository, DeliverySimulationManager simManager)
+        public CargoGrpcService(
+            CargoRepository repository,
+            DeliverySimulationManager simManager,
+            ILogger<CargoGrpcService> logger)
         {
             _repository = repository;
             _simManager = simManager;
+            _logger = logger;
         }
 
-        public override async Task<CargoStatusResponse> GetCargoStatus(CargoLookupRequest request, ServerCallContext context)
+        public override Task<CargoStatusResponse> GetCargoStatus(CargoLookupRequest request, ServerCallContext context)
         {
-            await _simManager.EnsureAllInTransitCargosStartedAsync();
-            _simManager.SyncAllActiveSimulationsWithRepo();
-
             var record = _repository.GetByTrackingNumber(request.TrackingNumber);
 
-            if (record == null)
-                return new CargoStatusResponse { IsFound = false };
-
-            return new CargoStatusResponse
-            {
-                IsFound = true,
-                TrackingNumber = record.TrackingNumber,
-                SenderName = record.SenderName,
-                ReceiverName = record.ReceiverName,
-                CurrentStatus = record.CurrentStatus,
-                LastLocation = record.LastLocation,
-                EstimatedDelivery = record.EstimatedDelivery,
-                IsActive = record.IsActive
-            };
+            return Task.FromResult(record == null
+                ? new CargoStatusResponse { IsFound = false }
+                : ToResponse(record));
         }
 
         public override Task<CreateCargoResponse> CreateCargo(CreateCargoRequest request, ServerCallContext context)
@@ -54,33 +51,18 @@ namespace CargoTracking.Server.Services
             });
         }
 
-        public override async Task<CargoListResponse> GetAllCargos(EmptyRequest request, ServerCallContext context)
+        public override Task<CargoListResponse> GetAllCargos(EmptyRequest request, ServerCallContext context)
         {
-            await _simManager.EnsureAllInTransitCargosStartedAsync();
-            _simManager.SyncAllActiveSimulationsWithRepo();
-
             var response = new CargoListResponse();
-            var allCargos = _repository.GetAll();
-
-            foreach (var record in allCargos)
+            foreach (var record in _repository.GetAll())
             {
-                response.Cargos.Add(new CargoStatusResponse
-                {
-                    IsFound = true,
-                    TrackingNumber = record.TrackingNumber,
-                    SenderName = record.SenderName,
-                    ReceiverName = record.ReceiverName,
-                    CurrentStatus = record.CurrentStatus,
-                    LastLocation = record.LastLocation,
-                    EstimatedDelivery = record.EstimatedDelivery,
-                    IsActive = record.IsActive
-                });
+                response.Cargos.Add(ToResponse(record));
             }
 
-            return response;
+            return Task.FromResult(response);
         }
 
-        public override async Task<UpdateStatusResponse> UpdateCargoStatus(UpdateStatusRequest request, ServerCallContext context)
+        public override Task<UpdateStatusResponse> UpdateCargoStatus(UpdateStatusRequest request, ServerCallContext context)
         {
             var existingRecord = _repository.GetByTrackingNumber(request.TrackingNumber);
             string oldStatus = existingRecord?.CurrentStatus ?? "";
@@ -94,27 +76,25 @@ namespace CargoTracking.Server.Services
                 request.NewStatus,
                 out string msg);
 
-            if (result && request.NewStatus == "Yola Çıktı")
+            if (result)
             {
-                // Sadece yeni yola çıkıyorsa simülasyonu sıfırla, zaten yoldaysa kuryenin konumunu bozma!
-                if (oldStatus != "Yola Çıktı")
+                // Yeni yola çıkıyorsa ya da artık yolda değilse eski simülasyon silinir.
+                // Zaten yoldaysa kuryenin konumu bozulmaz. Yeni simülasyonu arka plan servisi kurar
+                // (adres aramasını beklemeden kaydetme hızlı döner).
+                if (request.NewStatus != "Yola Çıktı" || oldStatus != "Yola Çıktı")
                 {
                     _simManager.RemoveSimulation(request.TrackingNumber);
                 }
-                await _simManager.EnsureSimulationStartedAsync(request.TrackingNumber, request.LastLocation);
-            }
-            else if (result && request.NewStatus != "Yola Çıktı")
-            {
-                _simManager.RemoveSimulation(request.TrackingNumber);
             }
 
-            return new UpdateStatusResponse
+            return Task.FromResult(new UpdateStatusResponse
             {
                 Success = result,
                 Message = msg
-            };
+            });
         }
 
+        /// <summary>Kuryenin konumunu saniyede bir istemciye akıtır (server streaming).</summary>
         public override async Task StreamCourierLocation(
             CargoLookupRequest request,
             IServerStreamWriter<LiveCourierLocation> responseStream,
@@ -122,33 +102,35 @@ namespace CargoTracking.Server.Services
         {
             try
             {
-                await _simManager.EnsureAllInTransitCargosStartedAsync();
-                _simManager.SyncAllActiveSimulationsWithRepo();
-
                 var record = _repository.GetByTrackingNumber(request.TrackingNumber);
 
                 if (record == null)
                 {
-                    await responseStream.WriteAsync(new LiveCourierLocation
-                    {
-                        TrackingNumber = request.TrackingNumber,
-                        CurrentStepText = $"{request.TrackingNumber} numaralı kargo sistemde bulunamadı."
-                    });
+                    await WriteMessageOnlyAsync(responseStream, request.TrackingNumber,
+                        $"{request.TrackingNumber} numaralı kargo sistemde bulunamadı.");
                     return;
                 }
 
                 if (record.CurrentStatus != "Yola Çıktı")
                 {
-                    await responseStream.WriteAsync(new LiveCourierLocation
-                    {
-                        TrackingNumber = request.TrackingNumber,
-                        CurrentStepText = $"Kargo şu anda '{record.CurrentStatus}' durumunda. Canlı harita sadece 'Yola Çıktı' durumundaki kargolar içindir.",
-                        IsDelivered = (record.CurrentStatus == "Teslim Edildi")
-                    });
+                    await WriteMessageOnlyAsync(responseStream, request.TrackingNumber,
+                        $"Kargo şu anda '{record.CurrentStatus}' durumunda. Canlı harita sadece 'Yola Çıktı' durumundaki kargolar içindir.",
+                        isDelivered: record.CurrentStatus == "Teslim Edildi");
                     return;
                 }
 
                 var sim = await _simManager.EnsureSimulationStartedAsync(record.TrackingNumber, record.LastLocation);
+
+                if (sim == null)
+                {
+                    // Koordinat yok (latitude/longitude = 0): istemci bunu hata mesajı olarak gösterir
+                    await WriteMessageOnlyAsync(responseStream, request.TrackingNumber,
+                        "Teslimat adresi haritada çözümlenemedi (harita servisine ulaşılamıyor olabilir). Birkaç saniye sonra tekrar deneyin.");
+                    return;
+                }
+
+                // Adres tam bulunamadıysa (örn. sadece mahalle merkezi) kullanıcıya her mesajda not düşülür
+                string note = string.IsNullOrEmpty(sim.PrecisionNote) ? "" : $" ⚠ {sim.PrecisionNote}";
 
                 while (!context.CancellationToken.IsCancellationRequested)
                 {
@@ -181,7 +163,7 @@ namespace CargoTracking.Server.Services
                         Latitude = curLat,
                         Longitude = curLng,
                         CourierName = sim.CourierName,
-                        CurrentStepText = statusText,
+                        CurrentStepText = statusText + note,
                         IsDelivered = isArrived,
                         StartLat = sim.StartLat,
                         StartLng = sim.StartLng,
@@ -191,6 +173,7 @@ namespace CargoTracking.Server.Services
 
                     if (isArrived)
                     {
+                        // Durumu hemen "Teslim Edildi" yap (arka plan servisini beklemeden)
                         _simManager.SyncAllActiveSimulationsWithRepo();
                         break;
                     }
@@ -198,8 +181,37 @@ namespace CargoTracking.Server.Services
                     await Task.Delay(1000, context.CancellationToken);
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception) { }
+            catch (OperationCanceledException)
+            {
+                // İstemci akışı kapattı (sayfadan çıktı / durdurdu), normal durum
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{TrackingNo} canlı konum akışı hata verdi.", request.TrackingNumber);
+            }
         }
+
+        // Veritabanı kaydını gRPC cevabına çevirir (3 yerde tekrar eden kod tek yerde toplandı)
+        private static CargoStatusResponse ToResponse(CargoRecord record) => new()
+        {
+            IsFound = true,
+            TrackingNumber = record.TrackingNumber,
+            SenderName = record.SenderName,
+            ReceiverName = record.ReceiverName,
+            CurrentStatus = record.CurrentStatus,
+            LastLocation = record.LastLocation,
+            EstimatedDelivery = record.EstimatedDelivery,
+            IsActive = record.IsActive
+        };
+
+        // Sadece mesaj taşıyan (koordinatsız) akış paketi gönderir; istemci bunu uyarı olarak gösterir
+        private static Task WriteMessageOnlyAsync(
+            IServerStreamWriter<LiveCourierLocation> stream, string trackingNumber, string message, bool isDelivered = false) =>
+            stream.WriteAsync(new LiveCourierLocation
+            {
+                TrackingNumber = trackingNumber,
+                CurrentStepText = message,
+                IsDelivered = isDelivered
+            });
     }
 }

@@ -3,6 +3,12 @@
 @inject CargoApiClient Api
 @inject UiStateService UiState
 
+@*
+    YENİ KARGO KAYDI ( /yeni )
+    Yeni sevkiyat oluşturma formu: gönderici, alıcı, teslimat adresi (il / ilçe / mahalle / cadde-sokak) ve tahmini teslim tarihi.
+    Kaydedince sunucu 4 haneli takip kodunu (TR-xxxx) üretir. Kapı numarası istenmez.
+*@
+
 <PageTitle>KARGO PRO | Yeni Kargo Kaydı</PageTitle>
 
 <div class="kp-form-container">
@@ -64,7 +70,7 @@
 
         if (string.IsNullOrWhiteSpace(_city) || string.IsNullOrWhiteSpace(_district) || string.IsNullOrWhiteSpace(_neighborhood) || string.IsNullOrWhiteSpace(_streetDetail))
         {
-            await UiState.ShowToastAsync("İl, ilçe, mahalle ve açık adres eksiksiz girilmelidir.", false);
+            await UiState.ShowToastAsync("İl, ilçe, mahalle ve cadde/sokak adı eksiksiz girilmelidir.", false);
             return;
         }
 
@@ -87,11 +93,11 @@
                 _receiver = "";
                 _city = "";
                 _district = "";
+                _neighborhood = "";
                 _streetDetail = "";
                 _deliveryDate = DateTime.Today;
 
-                var all = await Api.GetAllCargosSafeAsync();
-                UiState.UpdateMetrics(all.Count(c => c.CurrentStatus == "Yola Çıktı"), Api.IsServerOnline);
+                await UiState.RefreshCargosAsync();
             }
         }
         catch (Exception ex)

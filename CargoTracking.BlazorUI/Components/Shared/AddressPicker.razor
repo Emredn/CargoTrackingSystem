@@ -1,25 +1,33 @@
-﻿@using CargoTracking.BlazorUI.Services
+@using CargoTracking.BlazorUI.Services
 @inject LocationService LocService
+
+@*
+    ORTAK ADRES SEÇİCİ (BİLEŞEN)
+    "Yeni Kargo Kaydı" ve "Sorgula ve Düzenle" sayfalarında kullanılır.
+    İl seçilince ilçeler, ilçe seçilince mahalleler/köyler listelenir (turkiyeapi.dev); sonra cadde/sokak adı yazılır.
+    Kapı numarası istenmez: haritada numara verisi çoğu yerde yok, adres cadde/sokak seviyesinde aranır.
+    Kullanım: <AddressPicker @bind-City="..." @bind-District="..." @bind-Neighborhood="..." @bind-StreetDetail="..." />
+*@
 
 <div class="kp-grid-2">
     <div class="kp-field">
         <label>Teslimat İli</label>
-        <select class="kp-input" value="@City" @onchange="OnCitySelectChanged" disabled="@Disabled">
+        <select class="kp-input" @onchange="OnCitySelectChanged" disabled="@Disabled">
             <option value="">-- İl Seçiniz --</option>
             @foreach (var prov in LocService.Provinces)
             {
-                <option value="@prov.Name">@prov.Name</option>
+                <option value="@prov.Name" selected="@(prov.Name == City)">@prov.Name</option>
             }
         </select>
     </div>
 
     <div class="kp-field">
         <label>Teslimat İlçesi</label>
-        <select class="kp-input" value="@District" @onchange="OnDistrictSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(City))">
+        <select class="kp-input" @onchange="OnDistrictSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(City))">
             <option value="">-- İlçe Seçiniz --</option>
             @foreach (var dist in LocService.GetDistricts(City))
             {
-                <option value="@dist">@dist</option>
+                <option value="@dist" selected="@(dist == District)">@dist</option>
             }
         </select>
     </div>
@@ -28,23 +36,24 @@
 <div class="kp-grid-2">
     <div class="kp-field">
         <label>Teslimat Mahallesi / Köyü</label>
-        <select class="kp-input" value="@Neighborhood" @onchange="OnNeighborhoodSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(District) || _loadingNeighborhoods)">
+        <select class="kp-input" @onchange="OnNeighborhoodSelectChanged" disabled="@(Disabled || string.IsNullOrEmpty(District) || _loadingNeighborhoods)">
             <option value="">@(_loadingNeighborhoods ? "Mahalleler yükleniyor..." : "-- Mahalle Seçiniz --")</option>
             @foreach (var nh in _neighborhoods)
             {
-                <option value="@nh">@nh</option>
+                <option value="@nh" selected="@(nh == Neighborhood)">@nh</option>
             }
         </select>
     </div>
 
     <div class="kp-field">
-        <label>Cadde, Sokak, Bina ve Kapı No</label>
+        <label>Cadde / Sokak Adı</label>
         <input type="text"
                class="kp-input"
-               placeholder="Örn: Atatürk Cad. No: 12 Daire: 4"
+               placeholder="Örn: Atatürk Caddesi"
                value="@StreetDetail"
                @oninput="OnStreetInput"
                disabled="@Disabled" />
+        <small style="display:block; margin-top:4px; opacity:0.7;">Kapı numarası yazmanıza gerek yok.</small>
     </div>
 </div>
 
@@ -85,18 +94,26 @@
 
     private async Task LoadNeighborhoodsInternalAsync()
     {
-        if (!string.IsNullOrWhiteSpace(City) && !string.IsNullOrWhiteSpace(District))
+        if (string.IsNullOrWhiteSpace(City) || string.IsNullOrWhiteSpace(District))
         {
-            _loadingNeighborhoods = true;
-            StateHasChanged();
-            _neighborhoods = await LocService.GetNeighborhoodsAsync(City, District);
-            _loadingNeighborhoods = false;
-            StateHasChanged();
+            _neighborhoods = new List<string>();
+            return;
         }
-        else
-        {
-            _neighborhoods.Clear();
-        }
+
+        string requestedCity = City;
+        string requestedDistrict = District;
+
+        _loadingNeighborhoods = true;
+        StateHasChanged();
+
+        var loaded = await LocService.GetNeighborhoodsAsync(requestedCity, requestedDistrict);
+
+        // Yükleme sürerken kullanıcı başka il/ilçe seçtiyse bu eski sonucu atla
+        if (requestedCity != City || requestedDistrict != District) return;
+
+        _neighborhoods = loaded;
+        _loadingNeighborhoods = false;
+        StateHasChanged();
     }
 
     private async Task OnCitySelectChanged(ChangeEventArgs e)
@@ -104,7 +121,7 @@
         City = e.Value?.ToString() ?? "";
         District = "";
         Neighborhood = "";
-        _neighborhoods.Clear();
+        _neighborhoods = new List<string>();
 
         await CityChanged.InvokeAsync(City);
         await DistrictChanged.InvokeAsync(District);

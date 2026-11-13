@@ -1,53 +1,59 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using CargoTracking.Server.Models;
 using CargoTracking.Server.Repositories;
 
 namespace CargoTracking.Server.Services
 {
+    /// <summary>
+    /// "Yola Çıktı" durumundaki kargolar için canlı kurye simülasyonlarını kurar ve yönetir:
+    ///  1. Adresi koordinata çevirir (sokak → mahalle → ilçe → il sırasıyla dener)
+    ///  2. Çıkış merkezi ile teslimat noktası arasında karayolu rotası alır
+    ///  3. Süre dolunca kargoyu "Teslim Edildi" yapar
+    /// Bu sınıfı periyodik olarak SimulationBackgroundService çalıştırır; okuma isteklerinde (liste/sorgu) çağrılmaz.
+    /// </summary>
     public class DeliverySimulationManager
     {
+        // Harita servisine ulaşılamazsa aynı kargo için bu süre dolmadan tekrar denenmez
+        private static readonly TimeSpan RetryCooldown = TimeSpan.FromSeconds(15);
+
         private readonly CargoRepository _repository;
         private readonly GeoRoutingService _geoService;
+        private readonly ILogger<DeliverySimulationManager> _logger;
 
         private readonly ConcurrentDictionary<string, ActiveDeliverySimulation> _activeDeliveries = new();
+        private readonly ConcurrentDictionary<string, DateTime> _retryAfterUtc = new();
         private readonly SemaphoreSlim _initLock = new(1, 1);
 
-        public DeliverySimulationManager(CargoRepository repository, GeoRoutingService geoService)
+        public DeliverySimulationManager(
+            CargoRepository repository,
+            GeoRoutingService geoService,
+            ILogger<DeliverySimulationManager> logger)
         {
             _repository = repository;
             _geoService = geoService;
+            _logger = logger;
         }
 
         public void RemoveSimulation(string trackingNo)
         {
             _activeDeliveries.TryRemove(trackingNo, out _);
+            _retryAfterUtc.TryRemove(trackingNo, out _);
         }
 
+        /// <summary>Veritabanında "Yola Çıktı" olup simülasyonu henüz kurulmamış kargoların simülasyonunu kurar.</summary>
         public async Task EnsureAllInTransitCargosStartedAsync()
         {
-            var inTransitList = _repository.GetAll()
+            var pending = _repository.GetAll()
                 .Where(c => c.CurrentStatus == "Yola Çıktı" && !_activeDeliveries.ContainsKey(c.TrackingNumber))
                 .ToList();
 
-            if (inTransitList.Count == 0) return;
-
-            await _initLock.WaitAsync();
-            try
+            foreach (var cargo in pending)
             {
-                foreach (var cargo in inTransitList)
-                {
-                    if (!_activeDeliveries.ContainsKey(cargo.TrackingNumber))
-                    {
-                        await EnsureSimulationStartedAsync(cargo.TrackingNumber, cargo.LastLocation);
-                    }
-                }
-            }
-            finally
-            {
-                _initLock.Release();
+                await EnsureSimulationStartedAsync(cargo.TrackingNumber, cargo.LastLocation);
             }
         }
 
+        /// <summary>Süresi dolan simülasyonları bitirir ve kargoyu "Teslim Edildi" durumuna alır.</summary>
         public void SyncAllActiveSimulationsWithRepo()
         {
             foreach (var kvp in _activeDeliveries.ToArray())
@@ -72,102 +78,167 @@ namespace CargoTracking.Server.Services
             }
         }
 
-        public async Task<ActiveDeliverySimulation> EnsureSimulationStartedAsync(string trackingNo, string rawAddress)
+        /// <summary>
+        /// Kargonun simülasyonunu döndürür; yoksa kurar.
+        /// Adres çözümlenemez ya da harita servisine ulaşılamazsa null döner (bir süre sonra yeniden denenir).
+        /// </summary>
+        public async Task<ActiveDeliverySimulation?> EnsureSimulationStartedAsync(string trackingNo, string rawAddress)
         {
             if (_activeDeliveries.TryGetValue(trackingNo, out var existing))
                 return existing;
 
-            string city = "Bursa";
-            string district = "Nilüfer";
-            string neighborhood = "";
-            string detail = "";
+            if (IsInCooldown(trackingNo))
+                return null;
 
-            int dashIdx = rawAddress.IndexOf('-');
-            string leftPart = dashIdx > 0 ? rawAddress.Substring(0, dashIdx).Trim() : rawAddress;
-            detail = dashIdx > 0 ? rawAddress.Substring(dashIdx + 1).Trim() : "";
-
-            // Format: "İl / İlçe / Mahalle - Açık Adres"
-            var slashParts = leftPart.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (slashParts.Length >= 3)
+            // Aynı anda iki çağrı aynı kargo için iki kere adres aramasın diye sıraya sokuyoruz
+            await _initLock.WaitAsync();
+            try
             {
-                city = slashParts[0].Trim();
-                district = slashParts[1].Trim();
-                neighborhood = slashParts[2].Trim();
+                // Kilidi beklerken başka bir çağrı simülasyonu kurmuş olabilir
+                if (_activeDeliveries.TryGetValue(trackingNo, out existing))
+                    return existing;
+
+                if (IsInCooldown(trackingNo))
+                    return null;
+
+                try
+                {
+                    var sim = await BuildSimulationAsync(trackingNo, rawAddress);
+                    if (sim == null)
+                    {
+                        _retryAfterUtc[trackingNo] = DateTime.UtcNow + RetryCooldown;
+                        return null;
+                    }
+
+                    _activeDeliveries[trackingNo] = sim;
+                    _retryAfterUtc.TryRemove(trackingNo, out _);
+                    return sim;
+                }
+                catch (GeocodingUnavailableException ex)
+                {
+                    _logger.LogWarning(ex, "{TrackingNo} için harita servisine ulaşılamadı, {Seconds} sn sonra yeniden denenecek.",
+                        trackingNo, (int)RetryCooldown.TotalSeconds);
+                    _retryAfterUtc[trackingNo] = DateTime.UtcNow + RetryCooldown;
+                    return null;
+                }
             }
-            else if (slashParts.Length == 2)
+            finally
             {
-                city = slashParts[0].Trim();
-                district = slashParts[1].Trim();
+                _initLock.Release();
             }
-            else if (slashParts.Length == 1)
+        }
+
+        private bool IsInCooldown(string trackingNo) =>
+            _retryAfterUtc.TryGetValue(trackingNo, out var until) && DateTime.UtcNow < until;
+
+        private async Task<ActiveDeliverySimulation?> BuildSimulationAsync(string trackingNo, string rawAddress)
+        {
+            var address = AddressParser.Parse(rawAddress);
+
+            if (string.IsNullOrWhiteSpace(address.City))
             {
-                city = slashParts[0].Trim();
-            }
-
-            // Nominatim'in daha kolay bulması için "Mah." kısaltmasını temizle
-            string cleanNeighborhood = neighborhood
-                .Replace("Mahallesi", "", StringComparison.OrdinalIgnoreCase)
-                .Replace("Mah.", "", StringComparison.OrdinalIgnoreCase)
-                .Trim();
-
-            // 1. ÇIKIŞ NOKTASI (İl Ana Transfer Merkezi)
-            string hubQuery = $"state={Uri.EscapeDataString(city)}&city={Uri.EscapeDataString(city)}";
-            var hubCoords = await _geoService.GeocodeLockedAsync(hubQuery)
-                         ?? await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString(city + " Merkez, Türkiye")}")
-                         ?? (40.1885, 29.0610);
-
-            (double Lat, double Lng)? destCoords = null;
-
-            // AŞAMA 1: Cadde/Sokak + Mahalle + İlçe + İl dene
-            if (!string.IsNullOrWhiteSpace(detail))
-            {
-                string q1 = !string.IsNullOrWhiteSpace(cleanNeighborhood)
-                    ? $"{detail}, {cleanNeighborhood}, {district}, {city}, Türkiye"
-                    : $"{detail}, {district}, {city}, Türkiye";
-
-                destCoords = await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString(q1)}");
-            }
-
-            // AŞAMA 2 (MAHALLE GARANTİSİ): Açık adresteki bina/kapı no yüzünden bulamadıysa direkt MAHALLEYE git!
-            if (destCoords == null && !string.IsNullOrWhiteSpace(cleanNeighborhood))
-            {
-                destCoords = await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString($"{cleanNeighborhood} Mahallesi, {district}, {city}, Türkiye")}")
-                          ?? await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString($"{cleanNeighborhood}, {district}, {city}, Türkiye")}");
+                _logger.LogWarning("{TrackingNo}: adreste il bilgisi yok ('{Address}'), simülasyon kurulamadı.", trackingNo, rawAddress);
+                return null;
             }
 
-            // AŞAMA 3: Mahalle de bulunamazsa İlçe merkezine git
-            if (destCoords == null)
+            var destination = await ResolveDestinationAsync(address);
+            if (destination == null)
             {
-                string districtQuery = $"city={Uri.EscapeDataString(district)}&state={Uri.EscapeDataString(city)}";
-                destCoords = await _geoService.GeocodeLockedAsync(districtQuery)
-                          ?? await _geoService.GeocodeLockedAsync($"q={Uri.EscapeDataString($"{district}, {city}, Türkiye")}");
+                _logger.LogWarning("{TrackingNo}: adres haritada bulunamadı ('{Address}').", trackingNo, rawAddress);
+                return null;
             }
 
-            var finalDest = destCoords ?? (hubCoords.Lat + 0.025, hubCoords.Lng + 0.035);
-
-            if (Math.Abs(hubCoords.Lat - finalDest.Lat) < 0.005 && Math.Abs(hubCoords.Lng - finalDest.Lng) < 0.005)
+            // Çıkış noktası: ilin merkezi ("Ana Transfer Merkezi"). İl sorgusu genellikle önbellekten gelir.
+            var hub = await _geoService.GeocodeAsync(address.City, address.City);
+            if (hub == null)
             {
-                hubCoords = (finalDest.Lat - 0.022, finalDest.Lng - 0.032);
+                _logger.LogWarning("{TrackingNo}: '{City}' ili haritada bulunamadı.", trackingNo, address.City);
+                return null;
             }
 
-            var routePoints = await _geoService.GetRoadRouteAsync(hubCoords, finalDest);
+            var hubCoords = hub.Value;
+            var dest = destination.Value;
 
-            var newSim = new ActiveDeliverySimulation
+            // Teslimat noktası il merkeziyle neredeyse aynıysa, haritada iki nokta ayrı görünsün diye çıkışı biraz kaydır
+            if (Math.Abs(hubCoords.Lat - dest.Lat) < 0.005 && Math.Abs(hubCoords.Lng - dest.Lng) < 0.005)
+            {
+                hubCoords = (dest.Lat - 0.022, dest.Lng - 0.032);
+            }
+
+            var routePoints = await _geoService.GetRoadRouteAsync(hubCoords, (dest.Lat, dest.Lng));
+
+            return new ActiveDeliverySimulation
             {
                 TrackingNumber = trackingNo,
                 CourierName = $"Kurye ({trackingNo})",
-                HubName = $"{city} Ana Transfer Merkezi",
+                HubName = $"{address.City} Ana Transfer Merkezi",
                 StartLat = hubCoords.Lat,
                 StartLng = hubCoords.Lng,
-                EndLat = finalDest.Lat,
-                EndLng = finalDest.Lng,
+                EndLat = dest.Lat,
+                EndLng = dest.Lng,
                 RoutePoints = routePoints,
                 StartedAt = DateTime.UtcNow,
-                TotalDurationSeconds = 60
+                TotalDurationSeconds = 60,
+                Precision = dest.Precision,
+                PrecisionNote = dest.Precision switch
+                {
+                    AddressPrecision.Street => "",
+                    AddressPrecision.Neighborhood => "Sokak haritada bulunamadı, mahalle merkezine yönlendirildi.",
+                    AddressPrecision.District => "Mahalle haritada bulunamadı, ilçe merkezine yönlendirildi.",
+                    _ => "İlçe haritada bulunamadı, il merkezine yönlendirildi."
+                }
             };
-
-            _activeDeliveries[trackingNo] = newSim;
-            return newSim;
         }
+
+        /// <summary>
+        /// Adresi en kesin seviyeden başlayarak arar: sokak → mahalle → ilçe → il.
+        /// Her aşamada sonuç, seçilen il/ilçe/mahalleyle karşılaştırılır (yanlış yerdeki sonuç kabul edilmez).
+        /// Hiçbir şey uydurulmaz: bulunamazsa null döner.
+        /// </summary>
+        private async Task<(double Lat, double Lng, AddressPrecision Precision)?> ResolveDestinationAsync(ParsedAddress a)
+        {
+            string neighborhood = AddressParser.StripNeighborhoodSuffix(a.Neighborhood);
+
+            // 1) Cadde / sokak (kapı numarası aranmaz)
+            if (!string.IsNullOrWhiteSpace(a.Street))
+            {
+                var p = await _geoService.GeocodeAsync(
+                    JoinParts(a.Street, neighborhood, a.District, a.City), a.City, a.District, a.Neighborhood);
+                if (p != null) return (p.Value.Lat, p.Value.Lng, AddressPrecision.Street);
+            }
+
+            // 2) Mahalle / köy ("Zafer Mahallesi" ve yalnızca "Zafer" diye iki şekilde dener)
+            if (!string.IsNullOrWhiteSpace(neighborhood))
+            {
+                string[] queries =
+                {
+                    JoinParts($"{neighborhood} Mahallesi", a.District, a.City),
+                    JoinParts(neighborhood, a.District, a.City)
+                };
+
+                foreach (var q in queries)
+                {
+                    var p = await _geoService.GeocodeAsync(q, a.City, a.District, a.Neighborhood);
+                    if (p != null) return (p.Value.Lat, p.Value.Lng, AddressPrecision.Neighborhood);
+                }
+            }
+
+            // 3) İlçe merkezi ("Merkez" ilçesi aranmaz, doğrudan ile geçilir)
+            if (!string.IsNullOrWhiteSpace(a.District) &&
+                !a.District.Equals("Merkez", StringComparison.OrdinalIgnoreCase))
+            {
+                var p = await _geoService.GeocodeAsync(JoinParts(a.District, a.City), a.City, a.District);
+                if (p != null) return (p.Value.Lat, p.Value.Lng, AddressPrecision.District);
+            }
+
+            // 4) İl merkezi
+            var city = await _geoService.GeocodeAsync(a.City, a.City);
+            if (city != null) return (city.Value.Lat, city.Value.Lng, AddressPrecision.City);
+
+            return null;
+        }
+
+        private static string JoinParts(params string[] parts) =>
+            string.Join(", ", parts.Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 }

@@ -10,6 +10,9 @@ builder.Services.AddSingleton<CargoRepository>();
 builder.Services.AddSingleton<GeoRoutingService>();
 builder.Services.AddSingleton<DeliverySimulationManager>();
 
+// Teslimat simülasyonlarını arka planda yürüten servis
+builder.Services.AddHostedService<SimulationBackgroundService>();
+
 var app = builder.Build();
 
 // Yazdığımız gRPC servisini dış dünyaya açıyoruz

@@ -1,8 +1,15 @@
 ﻿@page "/"
 @using CargoTracking.Grpc
-@inject CargoApiClient Api
+@implements IDisposable
 @inject UiStateService UiState
 @inject NavigationManager Nav
+
+@*
+    ANA SAYFA ( / )
+    Operasyon özet paneli: toplam / aktif / yoldaki / arşivdeki kargo sayıları (kartlara tıklayınca ilgili listeye gider),
+    son 5 kargo kaydı ve şu an sahada olan kuryelerin listesi.
+    Veriler UiStateService'teki kargo listesinden okunur; arka planda her 3 saniyede güncellendiği için sayfa kendiliğinden yenilenir.
+*@
 
 <PageTitle>KARGO PRO | Ana Sayfa</PageTitle>
 
@@ -31,7 +38,7 @@
                 <span>TOPLAM SEVKİYAT HACMİ</span>
                 <div class="kp-kpi-icon">📦</div>
             </div>
-            <div class="kp-kpi-value">@_totalCount</div>
+            <div class="kp-kpi-value">@TotalCount</div>
             <div class="kp-kpi-bar"><div style="width: 100%; background:#3b82f6;"></div></div>
             <div class="kp-kpi-foot">Tüm kayıtları incelemek için tıklayın →</div>
         </div>
@@ -41,9 +48,9 @@
                 <span>AKTİF OPERASYONDAKİLER</span>
                 <div class="kp-kpi-icon">⚡</div>
             </div>
-            <div class="kp-kpi-value">@_activeCount</div>
-            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_activeCount))%; background:#10b981;"></div></div>
-            <div class="kp-kpi-foot">Operasyon oranı: %@GetPercentage(_activeCount) →</div>
+            <div class="kp-kpi-value">@ActiveCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(ActiveCount))%; background:#10b981;"></div></div>
+            <div class="kp-kpi-foot">Operasyon oranı: %@GetPercentage(ActiveCount) →</div>
         </div>
 
         <div class="kp-kpi-card kpi-cyan" @onclick='() => Nav.NavigateTo("/canli")'>
@@ -51,8 +58,8 @@
                 <span>SAHADA YOLA ÇIKAN (CANLI)</span>
                 <div class="kp-kpi-icon">🚚</div>
             </div>
-            <div class="kp-kpi-value">@_inTransitCount</div>
-            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_inTransitCount))%; background:#06b6d4;"></div></div>
+            <div class="kp-kpi-value">@InTransitCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(InTransitCount))%; background:#06b6d4;"></div></div>
             <div class="kp-kpi-foot">Canlı GPS radarına bağlan →</div>
         </div>
 
@@ -61,9 +68,9 @@
                 <span>TAMAMLANAN / ARŞİV</span>
                 <div class="kp-kpi-icon">✓</div>
             </div>
-            <div class="kp-kpi-value">@_passiveCount</div>
-            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(_passiveCount))%; background:#64748b;"></div></div>
-            <div class="kp-kpi-foot">Tamamlanma oranı: %@GetPercentage(_passiveCount) →</div>
+            <div class="kp-kpi-value">@PassiveCount</div>
+            <div class="kp-kpi-bar"><div style="width: @(GetPercentage(PassiveCount))%; background:#64748b;"></div></div>
+            <div class="kp-kpi-foot">Tamamlanma oranı: %@GetPercentage(PassiveCount) →</div>
         </div>
     </div>
 
@@ -91,7 +98,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _cargos.TakeLast(5).Reverse())
+                        @foreach (var item in Cargos.TakeLast(5).Reverse())
                         {
                             <tr @onclick='() => Nav.NavigateTo($"/sorgula/{item.TrackingNumber.Replace("TR-", "")}")'>
                                 <td><strong class="kp-mono">@item.TrackingNumber</strong></td>
@@ -114,7 +121,7 @@
                 </div>
             </div>
             <div class="kp-fleet-list">
-                @if (!_cargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
+                @if (!Cargos.Any(c => c.CurrentStatus == "Yola Çıktı"))
                 {
                     <div class="kp-empty-state">
                         Şu anda "Yola Çıktı" statüsünde sahada kurye bulunmuyor. Sorgula ve Düzenle ekranından bir kargoyu yola çıkarabilirsiniz.
@@ -122,7 +129,7 @@
                 }
                 else
                 {
-                    @foreach (var activeItem in _cargos.Where(c => c.CurrentStatus == "Yola Çıktı"))
+                    @foreach (var activeItem in Cargos.Where(c => c.CurrentStatus == "Yola Çıktı"))
                     {
                         <div class="kp-fleet-item">
                             <div class="kp-fleet-info">
@@ -145,28 +152,25 @@
 </div>
 
 @code {
-    private List<CargoStatusResponse> _cargos = new();
-    private int _totalCount;
-    private int _activeCount;
-    private int _passiveCount;
-    private int _inTransitCount;
+    // Veriler UiStateService'teki ortak listeden okunur; sayfa kendi başına sunucuya sormaz
+    private List<CargoStatusResponse> Cargos => UiState.CachedCargos;
+    private int TotalCount => Cargos.Count;
+    private int ActiveCount => Cargos.Count(c => c.IsActive);
+    private int PassiveCount => Cargos.Count(c => !c.IsActive);
+    private int InTransitCount => Cargos.Count(c => c.CurrentStatus == "Yola Çıktı");
 
     protected override async Task OnInitializedAsync()
     {
+        UiState.OnChange += OnUiStateChanged;
         UiState.SetBreadcrumb("Operasyon Merkezi  /  Ana Sayfa");
-        await RefreshDashboardAsync();
+
+        // Sayfa açılınca listeyi hemen tazele (arka plan taraması 3 sn'de bir çalışır)
+        await UiState.RefreshCargosAsync();
     }
 
-    private async Task RefreshDashboardAsync()
-    {
-        _cargos = await Api.GetAllCargosSafeAsync();
-        _totalCount = _cargos.Count;
-        _activeCount = _cargos.Count(c => c.IsActive);
-        _passiveCount = _cargos.Count(c => !c.IsActive);
-        _inTransitCount = _cargos.Count(c => c.CurrentStatus == "Yola Çıktı");
+    private void OnUiStateChanged() => InvokeAsync(StateHasChanged);
 
-        UiState.UpdateMetrics(_inTransitCount, Api.IsServerOnline);
-    }
+    private int GetPercentage(int part) => TotalCount == 0 ? 0 : (int)Math.Round((double)part / TotalCount * 100);
 
-    private int GetPercentage(int part) => _totalCount == 0 ? 0 : (int)Math.Round((double)part / _totalCount * 100);
+    public void Dispose() => UiState.OnChange -= OnUiStateChanged;
 }

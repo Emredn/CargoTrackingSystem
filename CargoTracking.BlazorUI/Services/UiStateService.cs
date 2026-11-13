@@ -1,4 +1,4 @@
-﻿using CargoTracking.Grpc;
+using CargoTracking.Grpc;
 using Microsoft.JSInterop;
 
 namespace CargoTracking.BlazorUI.Services
@@ -9,17 +9,32 @@ namespace CargoTracking.BlazorUI.Services
         public bool IsSuccess { get; set; }
     }
 
+    /// <summary>
+    /// Bütün sayfaların ortak kullandığı arayüz durumu (kullanıcı oturumu başına bir tane):
+    /// tema, ekmek kırıntısı (breadcrumb), bildirimler (toast), sunucu durumu ve kargo listesi önbelleği.
+    /// Durum değişince OnChange olayı tetiklenir; ilgili bileşenler kendini yeniler.
+    /// </summary>
     public class UiStateService
     {
+        private readonly CargoApiClient _api;
+
+        public UiStateService(CargoApiClient api)
+        {
+            _api = api;
+        }
+
         public bool IsDarkMode { get; private set; } = true;
         public string Breadcrumb { get; private set; } = "Operasyon Merkezi  /  Ana Sayfa";
-        public int InTransitCount { get; private set; }
         public bool ServerOnline { get; private set; } = true;
 
         public List<ToastItem> Toasts { get; } = new();
 
-        // Tüm sayfaların anlık erişebileceği merkezi kargo listesi
+        /// <summary>Sunucudan en son alınan kargo listesi. Arka plan taraması ve sayfalar bunu günceller.</summary>
         public List<CargoStatusResponse> CachedCargos { get; private set; } = new();
+
+        /// <summary>Şu an "Yola Çıktı" durumundaki kargo sayısı (menüdeki rozet için).</summary>
+        public int InTransitCount => CachedCargos.Count(c => c.CurrentStatus == "Yola Çıktı");
+
         private readonly Dictionary<string, string> _lastKnownStatuses = new();
         private bool _isFirstLoad = true;
 
@@ -34,20 +49,36 @@ namespace CargoTracking.BlazorUI.Services
             }
         }
 
-        // Arka plan tarayıcısı her çalıştığında yeni durumu kontrol eder
-        public async Task SyncCargosAsync(List<CargoStatusResponse> freshList, bool serverOnline)
+        /// <summary>
+        /// Kargo listesini sunucudan yeniler, önbelleği günceller ve abonelere haber verir.
+        /// Sunucuya ulaşılamazsa son bilinen liste korunur, sadece "çevrimdışı" işaretlenir.
+        /// </summary>
+        public async Task<List<CargoStatusResponse>> RefreshCargosAsync()
+        {
+            var fresh = await _api.GetAllCargosSafeAsync();
+
+            if (!_api.IsServerOnline)
+            {
+                ServerOnline = false;
+                NotifyStateChanged();
+                return CachedCargos;
+            }
+
+            ApplyFreshCargos(fresh);
+            return fresh;
+        }
+
+        private void ApplyFreshCargos(List<CargoStatusResponse> freshList)
         {
             if (!_isFirstLoad)
             {
                 foreach (var cargo in freshList)
                 {
-                    if (_lastKnownStatuses.TryGetValue(cargo.TrackingNumber, out string? oldStatus))
+                    // Kargo "Yola Çıktı" durumundan "Teslim Edildi" durumuna geçtiği an bildirim göster
+                    if (_lastKnownStatuses.TryGetValue(cargo.TrackingNumber, out string? oldStatus) &&
+                        oldStatus == "Yola Çıktı" && cargo.CurrentStatus == "Teslim Edildi")
                     {
-                        // Kargo "Yola Çıktı" durumundan "Teslim Edildi" durumuna geçtiği an bildirim patlat!
-                        if (oldStatus == "Yola Çıktı" && cargo.CurrentStatus == "Teslim Edildi")
-                        {
-                            _ = ShowToastAsync($"🎉 {cargo.TrackingNumber} ({cargo.ReceiverName}) adresine başarıyla teslim edildi!", true);
-                        }
+                        _ = ShowToastAsync($"🎉 {cargo.TrackingNumber} ({cargo.ReceiverName}) adresine başarıyla teslim edildi!", true);
                     }
                 }
             }
@@ -60,16 +91,8 @@ namespace CargoTracking.BlazorUI.Services
             _isFirstLoad = false;
 
             CachedCargos = freshList;
-            InTransitCount = freshList.Count(c => c.CurrentStatus == "Yola Çıktı");
-            ServerOnline = serverOnline;
+            ServerOnline = true;
 
-            NotifyStateChanged();
-        }
-
-        public void UpdateMetrics(int inTransitCount, bool serverOnline)
-        {
-            InTransitCount = inTransitCount;
-            ServerOnline = serverOnline;
             NotifyStateChanged();
         }
 

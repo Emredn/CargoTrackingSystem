@@ -15,9 +15,21 @@ namespace CargoTracking.BlazorUI.Services
         public List<DistrictModel> Districts { get; set; } = new();
     }
 
+    /// <summary>
+    /// İl / ilçe / mahalle listelerini turkiyeapi.dev'den çeker ve önbellekte tutar (uygulama boyunca tek kopya).
+    /// İnternet yoksa az sayıda örnek il/ilçe ile çalışır ve bir sonraki fırsatta gerçek listeyi tekrar dener.
+    /// Ayrıca veritabanındaki "İl / İlçe / Mahalle - Sokak" adres metnini parçalara ayırır.
+    /// </summary>
     public class LocationService
     {
-        private static readonly HttpClient _http = new();
+        private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
+
+        // Gerçek liste alınamadıysa yedek liste kullanılır; yedek listedeki ilçelerin Id'si 0'dır
+        private const int FallbackDistrictId = 0;
+        private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(30);
+
+        private bool _usingFallback;
+        private DateTime _lastLoadAttemptUtc = DateTime.MinValue;
         private List<ProvinceModel> _provinces = new();
         private readonly ConcurrentDictionary<int, List<string>> _neighborhoodCache = new();
 
@@ -25,7 +37,11 @@ namespace CargoTracking.BlazorUI.Services
 
         public async Task EnsureLoadedAsync()
         {
-            if (_provinces.Any()) return;
+            // Gerçek liste yüklüyse bitti. Yedek listedeysek en fazla 30 saniyede bir yeniden deneriz.
+            if (_provinces.Any() && !_usingFallback) return;
+            if (_usingFallback && DateTime.UtcNow - _lastLoadAttemptUtc < RetryInterval) return;
+
+            _lastLoadAttemptUtc = DateTime.UtcNow;
 
             try
             {
@@ -60,13 +76,15 @@ namespace CargoTracking.BlazorUI.Services
                 }
 
                 _provinces = tempList.OrderBy(p => p.Name).ToList();
+                _usingFallback = false;
             }
             catch
             {
+                _usingFallback = true;
                 _provinces = new List<ProvinceModel>
                 {
-                    new() { Name = "Bursa", Districts = new() { new() { Id = 1, Name = "Nilüfer" }, new() { Id = 2, Name = "Osmangazi" }, new() { Id = 3, Name = "Yıldırım" } } },
-                    new() { Name = "İstanbul", Districts = new() { new() { Id = 4, Name = "Kadıköy" }, new() { Id = 5, Name = "Üsküdar" }, new() { Id = 6, Name = "Beşiktaş" } } }
+                    new() { Name = "Bursa", Districts = new() { new() { Id = FallbackDistrictId, Name = "Nilüfer" }, new() { Id = FallbackDistrictId, Name = "Osmangazi" }, new() { Id = FallbackDistrictId, Name = "Yıldırım" } } },
+                    new() { Name = "İstanbul", Districts = new() { new() { Id = FallbackDistrictId, Name = "Kadıköy" }, new() { Id = FallbackDistrictId, Name = "Üsküdar" }, new() { Id = FallbackDistrictId, Name = "Beşiktaş" } } }
                 };
             }
         }
@@ -85,10 +103,13 @@ namespace CargoTracking.BlazorUI.Services
             var prov = _provinces.FirstOrDefault(p => p.Name.Equals(cityName, StringComparison.OrdinalIgnoreCase));
             var dist = prov?.Districts.FirstOrDefault(d => d.Name.Equals(districtName, StringComparison.OrdinalIgnoreCase));
 
-            if (dist == null || dist.Id <= 10)
-            {
+            // İlçe listede yoksa mahalle de yoktur
+            if (dist == null)
+                return new List<string>();
+
+            // Sadece internet yokken kullanılan yedek ilçeler için örnek mahalle listesi
+            if (dist.Id == FallbackDistrictId)
                 return new List<string> { "Merkez Mah.", "Cumhuriyet Mah.", "Atatürk Mah.", "Fatih Mah." };
-            }
 
             if (_neighborhoodCache.TryGetValue(dist.Id, out var cached))
                 return cached;
@@ -129,34 +150,44 @@ namespace CargoTracking.BlazorUI.Services
             }
         }
 
-        // Format: "İl / İlçe / Mahalle - Cadde Sokak No"
+        // Format: "İl / İlçe / Mahalle - Cadde/Sokak"
+        // Ayırıcı olarak sadece " - " (boşluklu tire) kullanılır; "Yeni-Mahalle" gibi isimler bölünmez.
+        // Listede bulunamayan parçalar boş bırakılır (eskiden sessizce başka bir ilçe seçiliyordu);
+        // kullanıcı düzenleme ekranında doğru değeri kendisi seçer.
         public void ParseStructuredAddress(string rawLocation, out string city, out string district, out string neighborhood, out string detail)
         {
-            city = "Bursa";
-            district = "Nilüfer";
+            city = "";
+            district = "";
             neighborhood = "";
-            detail = rawLocation;
+            detail = rawLocation ?? "";
 
             if (string.IsNullOrWhiteSpace(rawLocation)) return;
 
-            int dashIdx = rawLocation.IndexOf('-');
-            string leftPart = dashIdx > 0 ? rawLocation.Substring(0, dashIdx).Trim() : rawLocation;
-            detail = dashIdx > 0 ? rawLocation.Substring(dashIdx + 1).Trim() : rawLocation;
+            string leftPart = rawLocation.Trim();
+            int sepIdx = leftPart.IndexOf(" - ", StringComparison.Ordinal);
+            if (sepIdx >= 0)
+            {
+                detail = leftPart.Substring(sepIdx + 3).Trim();
+                leftPart = leftPart.Substring(0, sepIdx).Trim();
+            }
 
-            var slashParts = leftPart.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var slashParts = leftPart.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (slashParts.Length == 0) return;
+
+            var matchedProv = _provinces.FirstOrDefault(p => p.Name.Equals(slashParts[0], StringComparison.OrdinalIgnoreCase));
+            if (matchedProv == null) return;
+
+            city = matchedProv.Name;
+
             if (slashParts.Length >= 2)
             {
-                string candidateCity = slashParts[0].Trim();
-                string candidateDist = slashParts[1].Trim();
-                neighborhood = slashParts.Length >= 3 ? slashParts[2].Trim() : "";
+                var matchedDist = matchedProv.Districts.FirstOrDefault(d => d.Name.Equals(slashParts[1], StringComparison.OrdinalIgnoreCase));
+                district = matchedDist?.Name ?? "";
+            }
 
-                var matchedProv = _provinces.FirstOrDefault(p => p.Name.Equals(candidateCity, StringComparison.OrdinalIgnoreCase));
-                if (matchedProv != null)
-                {
-                    city = matchedProv.Name;
-                    var matchedDist = matchedProv.Districts.FirstOrDefault(d => d.Name.Equals(candidateDist, StringComparison.OrdinalIgnoreCase));
-                    district = matchedDist?.Name ?? matchedProv.Districts.FirstOrDefault()?.Name ?? "";
-                }
+            if (slashParts.Length >= 3)
+            {
+                neighborhood = slashParts[2];
             }
         }
     }

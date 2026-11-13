@@ -6,8 +6,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Uygulama genelinde tek kopya (singleton): sunucuya giden gRPC kanalı ve il/ilçe/mahalle listesi
 builder.Services.AddSingleton<CargoTracking.BlazorUI.Services.CargoApiClient>();
 builder.Services.AddSingleton<CargoTracking.BlazorUI.Services.LocationService>();
+
+// Kullanıcı oturumu (sekme) başına bir kopya (scoped): tema, bildirimler, kargo listesi önbelleği
 builder.Services.AddScoped<CargoTracking.BlazorUI.Services.UiStateService>();
 
 var app = builder.Build();
